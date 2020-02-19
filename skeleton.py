@@ -4,7 +4,6 @@ PyQT launcher.
 """
 
 # Importation of modules
-
 import sys
 import os
 from PyQt5 import QtWidgets, QtGui, QtCore
@@ -47,10 +46,10 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         #self.IMU = False
         self.IMU = imu_sensor.MinIMUv5()
 
-        # Updating pyqtgraph imageview appearange
-        self.ui.visualisationWindow.ui.roiBtn.hide()
-        self.ui.visualisationWindow.ui.menuBtn.hide()
-        self.ui.visualisationWindow.ui.histogram.hide()
+        # Updating pyqtgraph appearange
+        #self.ui.visualisationWindow.ui.roiBtn.hide()
+        #self.ui.visualisationWindow.ui.menuBtn.hide()
+        #self.ui.visualisationWindow.ui.histogram.hide()
 
         # Spinbox with keyboard tracking disable
         self.ui.exposureSpinBox.setKeyboardTracking(False)
@@ -130,7 +129,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             met_dict = self.metadata_xiMU(self.img)  # Metadata in dictionary
 
 
-            radinstance = radiance.Radiance(data_raw, met_dict, "air", self.savepath + self.foldername)
+            radinstance = radiance.Radiance(data_raw, met_dict, "air", "test")
             radinstance.absolute_radiance()
             radinstance.makeradiancemap([0, 180], [0, 180], angular_res=0.25)
 
@@ -383,12 +382,17 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
     def plot_avg(self, angle, rad_red, rad_green, rad_blue):
 
         self.ui.visualisationWindow.clear()
-        self.plOT(angle, rad_red, "red curve", "r")
-        self.plOT(angle, rad_green, "green curve", "g")
-        self.plOT(angle, rad_blue, "blue curve", "b")
 
+        self.pyqtplot(angle, rad_red, "red curve", "r")
+        self.pyqtplot(angle, rad_green, "green curve", "g")
+        self.pyqtplot(angle, rad_blue, "blue curve", "b")
 
-    def plOT(self, x, y, plotname, color):
+        self.ui.visualisationWindow.setLabel("left", "Radiance azimuthal average")
+        self.ui.visualisationWindow.setLabel("bottom", "Zenith angle [˚]")
+
+        self.ui.visualisationWindow.addLegend()
+
+    def pyqtplot(self, x, y, plotname, color):
         pen = pyqtgraph.mkPen(color=color)
         self.ui.visualisationWindow.plot(x, y, name=plotname, pen=pen)
 
