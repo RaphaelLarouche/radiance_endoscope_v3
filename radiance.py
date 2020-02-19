@@ -9,14 +9,14 @@ Optimize version with cleaner function (radiance_endoscope_v2 for original funct
 
 # Importation of standard modules
 import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import glob
 from math import pi
-from mpl_toolkits.mplot3d import Axes3D
-from mayavi import mlab
 import quadpy
 from scipy.interpolate import griddata
+import time
 
 # Importation of other modules
 import cameracontrol
@@ -528,11 +528,15 @@ if __name__ == "__main__":
     #print(a.lebedev_integration_test([90, 180], [0, 360], 125, viz=True))
 
     # Example normal processing
+    t0 = time.time()
     RAD = Radiance(image, metadata, "air", "ok")
     imRAD = RAD.absolute_radiance()
     imRADmap = RAD.makeradiancemap([0, 180], [0, 180], angular_res=0.25)
 
     azi_avg = RAD.azimuthal_integration()
+    tf = time.time()
+    dt = tf - t0
+    print(dt)
 
     plt.figure()
     plt.imshow(imRADmap[:, :, 0])

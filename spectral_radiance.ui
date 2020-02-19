@@ -27,11 +27,11 @@
            </property>
            <layout class="QHBoxLayout" name="horizontalLayout_5">
             <item>
-             <widget class="ImageView" name="visualisationWindow">
+             <widget class="PlotWidget" name="visualisationWindow">
               <property name="minimumSize">
                <size>
-                <width>600</width>
-                <height>400</height>
+                <width>400</width>
+                <height>200</height>
                </size>
               </property>
              </widget>
@@ -468,7 +468,7 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>ImageView</class>
+   <class>PlotWidget</class>
    <extends>QGraphicsView</extends>
    <header>pyqtgraph</header>
   </customwidget>

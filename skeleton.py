@@ -8,6 +8,7 @@ PyQT launcher.
 import sys
 import os
 from PyQt5 import QtWidgets, QtGui, QtCore
+import pyqtgraph
 from gui_source_code import Ui_mainWindow
 import glob
 import datetime
@@ -131,11 +132,15 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
             radinstance = radiance.Radiance(data_raw, met_dict, "air", self.savepath + self.foldername)
             radinstance.absolute_radiance()
-            radmap = radinstance.makeradiancemap([0, 180], [0, 180], angular_res=0.25)
+            radinstance.makeradiancemap([0, 180], [0, 180], angular_res=0.25)
+
+            azi_avg = radinstance.azimuthal_integration()
 
             # Update image
             #self.ui.visualisationWindow.setImage(data_raw.T)
-            self.ui.visualisationWindow.setImage(radmap)
+            #self.ui.visualisationWindow.setImage(radmap.T)
+
+            self.plot_avg(radinstance.zenith_vect * 180/np.pi, azi_avg[:, 0], azi_avg[:, 1], azi_avg[:, 2])
 
             # # IMU sensor data
             # xAngle, yAngle, zAngle = self.IMU.kalman_filter()  # xAngle - roll, yAngle - pitch, zAngle - Yaw
@@ -256,9 +261,9 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         # self.ui.pitch.display("{0:.2f}".format(yAngle))
         # self.ui.yaw.display("{0:.2f}".format(zAngle))
 
-        self.ui.roll.setText("{0:.3f}".format(xAngle))
-        self.ui.pitch.setText("{0:.3f}".format(yAngle))
-        self.ui.yaw.setText("{0:.3f}".format(zAngle))
+        self.ui.roll.setText("{0:.3f} ˚".format(xAngle))
+        self.ui.pitch.setText("{0:.3f} ˚".format(yAngle))
+        self.ui.yaw.setText("{0:.3f} ˚".format(zAngle))
 
     @staticmethod
     def metadata_xiMU(structure):
@@ -374,6 +379,19 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         if temp >= 65:
             raise ValueError("Board temperature exceeds 65˚C")
+
+    def plot_avg(self, angle, rad_red, rad_green, rad_blue):
+
+        self.ui.visualisationWindow.clear()
+        self.plOT(angle, rad_red, "red curve", "r")
+        self.plOT(angle, rad_green, "green curve", "g")
+        self.plOT(angle, rad_blue, "blue curve", "b")
+
+
+    def plOT(self, x, y, plotname, color):
+        pen = pyqtgraph.mkPen(color=color)
+        self.ui.visualisationWindow.plot(x, y, name=plotname, pen=pen)
+
 
     def closeEvent(self, event):  # Should also do a functino for signal KILL code 137.....?
         """

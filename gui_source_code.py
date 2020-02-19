@@ -24,8 +24,8 @@ class Ui_mainWindow(object):
         self.sensorInfo.setObjectName("sensorInfo")
         self.horizontalLayout_5 = QtWidgets.QHBoxLayout(self.sensorInfo)
         self.horizontalLayout_5.setObjectName("horizontalLayout_5")
-        self.visualisationWindow = ImageView(self.sensorInfo)
-        self.visualisationWindow.setMinimumSize(QtCore.QSize(600, 400))
+        self.visualisationWindow = PlotWidget(self.sensorInfo)
+        self.visualisationWindow.setMinimumSize(QtCore.QSize(400, 200))
         self.visualisationWindow.setObjectName("visualisationWindow")
         self.horizontalLayout_5.addWidget(self.visualisationWindow)
         self.line = QtWidgets.QFrame(self.sensorInfo)
@@ -248,4 +248,4 @@ class Ui_mainWindow(object):
         self.labelfname.setText(_translate("mainWindow", "Folder name"))
         self.chooseFolderButton.setText(_translate("mainWindow", "Choose directory"))
 
-from pyqtgraph import ImageView
+from pyqtgraph import PlotWidget
