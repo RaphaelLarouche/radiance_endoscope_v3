@@ -347,8 +347,8 @@ class MinIMUv5(MinIMU_v5_pi):
             Gza += 2 * np.pi
 
         # This combines a LPF on phi, rho, and theta with a HPF on the Gyro values
-        tau = dt * 10
-        alpha = tau / (tau + dt)
+        #tau = dt * 10
+        alpha = self.tau / (self.tau + dt)
         self.yaw_hat = (alpha * Gza) + ((1 - alpha) * yaw)
 
         gyro_input = np.array([[roll_dot], [pitch_dot]])
@@ -381,7 +381,7 @@ class MinIMUv5(MinIMU_v5_pi):
         self.P = (np.eye(4) - K.dot(C)).dot(self.P)
 
         # Printing results
-        print("Roll: " + str(rhat) + " Pitch: " + str(phat) + " Yaw: " + str(yhat))
+        #print("Roll: " + str(rhat) + " Pitch: " + str(phat) + " Yaw: " + str(yhat))
 
         # Update time for dt calculations
         self.timekalman = time.time()

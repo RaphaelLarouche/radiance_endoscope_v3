@@ -16,6 +16,7 @@ import imu_sensor
 from ximea import xiapi
 import numpy as np
 import radiance
+import threadfile
 
 
 class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
@@ -45,6 +46,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         # IMU object
         #self.IMU = False
         self.IMU = imu_sensor.MinIMUv5()
+        self.euler_thread = threadfile.euler()
 
         # Updating pyqtgraph appearange
         #self.ui.visualisationWindow.ui.roiBtn.hide()
@@ -62,7 +64,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.tim_imu = QtCore.QTimer(self)
         self.tim_imu.timeout.connect(self.realtimedata_imu)
 
-        # Connection events ___________________________________________________________________
+        # Connections ___________________________________________________________________
         self.ui.exposureSlider.valueChanged.connect(self.exposure_slider)
         self.ui.gainSlider.valueChanged.connect(self.gain_slider)
 
@@ -82,6 +84,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         self.ui.fname.editingFinished.connect(self.folder_name_changed)
 
+        self.euler_thread.my_signal.connect(self.display_angle)
+
     def start_realtimedata(self):
         """
         Function executed when live checkbox is toggled. The function starts the timer (label tim).
@@ -97,11 +101,14 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.tim_camera.start(1000)  # Updating each 1 s to prevent acquisition bug
 
             # IMU thread
-            self.tim_imu.start(4)
+            self.euler_thread.running = True
+            #self.IMU.acc_offsets()  # Calibration of offsets
+            #self.tim_imu.start(4)
 
         else:
             self.tim_camera.stop()
-            self.tim_imu.stop()
+            #self.tim_imu.stop()
+            self.euler_thread.running = False
 
             # Stopping acquisition
             print("Stopping acquisition...")
