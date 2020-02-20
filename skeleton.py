@@ -33,6 +33,10 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         # Create ximea Camera instance
         self.status = False
+        print("Opening camera")
+        self.cam.open_device_by("XI_OPEN_BY_SN", "16990159")
+        self.status = True
+
         self.cam = xiapi.Camera()
 
         # Create ximea Image instance to store image data and metadata
@@ -44,9 +48,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.gain = self.ui.gainDoubleSpinBox.value()
 
         # IMU object
-        #self.IMU = False
-        self.IMU = imu_sensor.MinIMUv5()
-        self.euler_thread = threadfile.euler()
+        self.euler_thread = threadfile.Euler()
 
         # Updating pyqtgraph appearange
         #self.ui.visualisationWindow.ui.roiBtn.hide()
@@ -60,9 +62,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         # Creation of a PyQT timer object for live data visualization
         self.tim_camera = QtCore.QTimer(self)
         self.tim_camera.timeout.connect(self.realtimedata_camera)  # Timer connection with camera
-
-        self.tim_imu = QtCore.QTimer(self)
-        self.tim_imu.timeout.connect(self.realtimedata_imu)
 
         # Connections ___________________________________________________________________
         self.ui.exposureSlider.valueChanged.connect(self.exposure_slider)
@@ -102,12 +101,10 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
             # IMU thread
             self.euler_thread.running = True
-            #self.IMU.acc_offsets()  # Calibration of offsets
-            #self.tim_imu.start(4)
+            self.euler_thread.start()
 
         else:
             self.tim_camera.stop()
-            #self.tim_imu.stop()
             self.euler_thread.running = False
 
             # Stopping acquisition
@@ -154,17 +151,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         else:
             raise ValueError("No devices found.")
-
-    def realtimedata_imu(self):
-        """
-
-        :return:
-        """
-        # Updating raw IMU sensor data
-        xAngle, yAngle, zAngle = self.IMU.kalman_filter()  # xAngle - roll, yAngle - pitch, zAngle - Yaw
-
-        # Showing angle
-        self.display_angle(xAngle, yAngle, zAngle)
 
     def open_sens(self):
         """
@@ -390,14 +376,14 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         self.ui.visualisationWindow.clear()
 
-        self.pyqtplot(angle, rad_red, "red curve", "r")
-        self.pyqtplot(angle, rad_green, "green curve", "g")
-        self.pyqtplot(angle, rad_blue, "blue curve", "b")
+        self.pyqtplot(angle, rad_red, "611 nm", "r")
+        self.pyqtplot(angle, rad_green, "530 nm", "g")
+        self.pyqtplot(angle, rad_blue, "468 nm", "b")
 
-        self.ui.visualisationWindow.setLabel("left", "Radiance azimuthal average")
-        self.ui.visualisationWindow.setLabel("bottom", "Zenith angle [˚]")
+        self.ui.visualisationWindow.setLabel("left", "D.N normalized", size="6pt")
+        self.ui.visualisationWindow.setLabel("bottom", "Zenith angle [˚]", size="6pt")
 
-        self.ui.visualisationWindow.addLegend()
+        self.ui.visualisationWindow.addLegend(offset=(10, 5))
 
     def pyqtplot(self, x, y, plotname, color):
         pen = pyqtgraph.mkPen(color=color)
@@ -414,6 +400,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         print("Closing device")
         if self.status:
             self.cam.close_device()
+
+        self.euler_thread.exit()
         event.accept()
 
 if __name__ == "__main__":
