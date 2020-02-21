@@ -33,27 +33,31 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         # Create ximea Camera instance
         self.status = False
-        print("Opening camera")
-        self.cam.open_device_by("XI_OPEN_BY_SN", "16990159")
-        self.status = True
-
         self.cam = xiapi.Camera()
 
         # Create ximea Image instance to store image data and metadata
         self.img = xiapi.Image()
+
+        print("Opening camera")
+        self.cam.open_device_by("XI_OPEN_BY_SN", "16990159")
+        self.status = True
 
         self.imformat = "XI_RAW16"
         self.bin = self.bin_choice[self.ui.binComboBox.currentText()]
         self.exp = self.ui.exposureSpinBox.value()
         self.gain = self.ui.gainDoubleSpinBox.value()
 
-        # IMU object
+        # Threads
         self.euler_thread = threadfile.Euler()
+        self.camera_thread = threadfile.CameraThread(self.imformat, self.bin, self.exp, self.gain, self.cam)
 
         # Updating pyqtgraph appearange
-        #self.ui.visualisationWindow.ui.roiBtn.hide()
-        #self.ui.visualisationWindow.ui.menuBtn.hide()
-        #self.ui.visualisationWindow.ui.histogram.hide()
+        self.pred = self.pyqtplot(np.array([0]), np.array([0]), "611 nm", "r")
+        self.pgreen = self.pyqtplot(np.array([0]), np.array([0]), "530 nm", "g")
+        self.pblue = self.pyqtplot(np.array([0]), np.array([0]), "468 nm", "b")
+
+        self.ui.visualisationWindow.setLabel("left", "D.N normalized", size="2pt")
+        self.ui.visualisationWindow.setLabel("bottom", "Zenith angle [˚]", size="2pt")
 
         # Spinbox with keyboard tracking disable
         self.ui.exposureSpinBox.setKeyboardTracking(False)
@@ -84,6 +88,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.ui.fname.editingFinished.connect(self.folder_name_changed)
 
         self.euler_thread.my_signal.connect(self.display_angle)
+        self.camera_thread.my_signal.connect(self.plot_avg)
 
     def start_realtimedata(self):
         """
@@ -97,14 +102,17 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.cam.start_acquisition()
 
             # Camera thread
-            self.tim_camera.start(1000)  # Updating each 1 s to prevent acquisition bug
+            #self.tim_camera.start(1000)  # Updating each 1 s to prevent acquisition bug
+            self.camera_thread.running = True
+            self.camera_thread.start()
 
             # IMU thread
             self.euler_thread.running = True
             self.euler_thread.start()
 
         else:
-            self.tim_camera.stop()
+            #self.tim_camera.stop()
+            self.camera_thread.running = False
             self.euler_thread.running = False
 
             # Stopping acquisition
@@ -131,7 +139,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
             # Metadata in dictionary
             met_dict = self.metadata_xiMU(self.img)  # Metadata in dictionary
-
 
             radinstance = radiance.Radiance(data_raw, met_dict, "air", "test")
             radinstance.absolute_radiance()
@@ -374,20 +381,24 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
     def plot_avg(self, angle, rad_red, rad_green, rad_blue):
 
-        self.ui.visualisationWindow.clear()
+        self.pred.setData(angle, rad_red)
+        self.pgreen.setData(angle, rad_green)
+        self.pblue.setData(angle, rad_blue)
 
-        self.pyqtplot(angle, rad_red, "611 nm", "r")
-        self.pyqtplot(angle, rad_green, "530 nm", "g")
-        self.pyqtplot(angle, rad_blue, "468 nm", "b")
+        #self.ui.visualisationWindow.clear()
 
-        self.ui.visualisationWindow.setLabel("left", "D.N normalized", size="6pt")
-        self.ui.visualisationWindow.setLabel("bottom", "Zenith angle [˚]", size="6pt")
+        #self.pyqtplot(angle, rad_red, "611 nm", "r")
+        #self.pyqtplot(angle, rad_green, "530 nm", "g")
+        #self.pyqtplot(angle, rad_blue, "468 nm", "b")
 
-        self.ui.visualisationWindow.addLegend(offset=(10, 5))
+        #self.ui.visualisationWindow.setLabel("left", "D.N normalized", size="6pt")
+        #self.ui.visualisationWindow.setLabel("bottom", "Zenith angle [˚]", size="6pt")
+
+        #self.ui.visualisationWindow.addLegend(offset=(10, 5))
 
     def pyqtplot(self, x, y, plotname, color):
         pen = pyqtgraph.mkPen(color=color)
-        self.ui.visualisationWindow.plot(x, y, name=plotname, pen=pen)
+        return self.ui.visualisationWindow.plot(x, y, name=plotname, pen=pen)
 
 
     def closeEvent(self, event):  # Should also do a functino for signal KILL code 137.....?
