@@ -51,7 +51,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.euler_thread = threadfile.Euler()
         self.camera_thread = threadfile.CameraThread(self.imformat, self.bin, self.exp, self.gain, self.cam)
 
-        # Updating pyqtgraph appearange
+        # Updating pyqtgraph graph appearance
         self.pred = self.pyqtplot(np.array([0]), np.array([0]), "611 nm", "r")
         self.pgreen = self.pyqtplot(np.array([0]), np.array([0]), "530 nm", "g")
         self.pblue = self.pyqtplot(np.array([0]), np.array([0]), "468 nm", "b")
@@ -78,8 +78,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         self.ui.chooseFolderButton.clicked.connect(self.getdirectory)  # Choose folder button
 
-        self.ui.openSensors.clicked.connect(self.open_sens)  # OPENING SENSORS
-
         self.ui.darkFrameButton.clicked.connect(self.darkframe_button)  # Darkframe button
         self.ui.acquisitionButton.clicked.connect(self.acquisition_button)  # Acquisition button
 
@@ -87,8 +85,10 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         self.ui.fname.editingFinished.connect(self.folder_name_changed)
 
+        # Custom signals from thread
         self.euler_thread.my_signal.connect(self.display_angle)
         self.camera_thread.my_signal.connect(self.plot_avg)
+        self.camera_thread.my_signal_temp.connect(self.ui.boardTemp.display)
 
     def start_realtimedata(self):
         """
@@ -102,7 +102,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.cam.start_acquisition()
 
             # Camera thread
-            #self.tim_camera.start(1000)  # Updating each 1 s to prevent acquisition bug
             self.camera_thread.running = True
             self.camera_thread.start()
 
@@ -111,7 +110,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.euler_thread.start()
 
         else:
-            #self.tim_camera.stop()
             self.camera_thread.running = False
             self.euler_thread.running = False
 
@@ -159,17 +157,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         else:
             raise ValueError("No devices found.")
 
-    def open_sens(self):
-        """
-        Opening sensor when openSensors button is clicked. Only for the camera.
-        :return:
-        """
-
-        # Camera
-        print("Opening camera")
-        self.cam.open_device_by("XI_OPEN_BY_SN", "16990159")
-        self.status = True
-
 
     def exposure_slider_to_spinbox(self, slider_val):
         slider_val /= 1000  # 1x10-4 de resolution --> 1x10-8 pour avoir 1 entre 10 000 000 et 9 999 999
@@ -187,6 +174,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.ui.exposureSpinBox.setValue(self.exposure_slider_to_spinbox(self.ui.exposureSlider.value()))
         self.exp = self.ui.exposureSpinBox.value()
 
+        self.camera_thread.exp = self.ui.exposureSpinBox.value()  # Update camera thread
+
     def gain_slider(self):
         """
         Change SpinBox value when Slider is moved. Gain.
@@ -196,6 +185,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.ui.gainDoubleSpinBox.setValue(self.ui.gainSlider.value())
         self.gain = self.ui.gainDoubleSpinBox.value()
 
+        self.camera_thread.gain = self.ui.gainDoubleSpinBox.value()  # Update camera thread
+
     def exposure_spin(self):
         """
         Change Slider value when SpinBox value is updated. Exposure time.
@@ -203,6 +194,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         """
         self.ui.exposureSlider.setValue(self.exposure_spinbox_to_slider(self.ui.exposureSpinBox.value()))
         self.exp = self.ui.exposureSpinBox.value()
+
+        self.camera_thread.exp = self.ui.exposureSpinBox.value()  # Update camera thread
 
     def gain_spin(self):
         """
@@ -212,6 +205,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.ui.gainSlider.setValue(self.ui.gainDoubleSpinBox.value())
         self.gain = self.ui.gainDoubleSpinBox.value()
 
+        self.camera_thread.gain = self.ui.gainDoubleSpinBox.value()   # Update camera thread
+
     def bin_combobox(self):
         """
         Modification of attributes bin when comboBox in changed. Binning
@@ -219,6 +214,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         """
         self.bin = self.bin_choice[self.ui.binComboBox.currentText()]
         print(self.bin)
+
+        self.camera_thread.bin = self.bin_choice[self.ui.binComboBox.currentText()]
 
     def getdirectory(self):
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Open files")
@@ -288,14 +285,13 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
     def acquisition(self):
         """
-        Acquisition of one image from transport buffer. No saving.
+        Acquisition of one image from transport buffer.
 
         :return:
         """
         if self.status:
 
             self.update_camera()  # Changing parameters of camera
-
             self.verify_temp()  # Verify if the board temperature is ok
 
             print("Starting data acquisition...")
@@ -400,7 +396,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         pen = pyqtgraph.mkPen(color=color)
         return self.ui.visualisationWindow.plot(x, y, name=plotname, pen=pen)
 
-
     def closeEvent(self, event):  # Should also do a functino for signal KILL code 137.....?
         """
         Over writing existing method.
@@ -413,7 +408,9 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.cam.close_device()
 
         self.euler_thread.exit()
+        self.camera_thread.exit()
         event.accept()
+
 
 if __name__ == "__main__":
 

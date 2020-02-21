@@ -52,44 +52,6 @@
                 </property>
                </widget>
               </item>
-              <item row="1" column="1">
-               <widget class="QLCDNumber" name="boardTemp">
-                <property name="maximumSize">
-                 <size>
-                  <width>180</width>
-                  <height>150</height>
-                 </size>
-                </property>
-                <property name="font">
-                 <font>
-                  <pointsize>8</pointsize>
-                  <weight>50</weight>
-                  <bold>false</bold>
-                 </font>
-                </property>
-                <property name="frameShape">
-                 <enum>QFrame::Box</enum>
-                </property>
-                <property name="frameShadow">
-                 <enum>QFrame::Raised</enum>
-                </property>
-                <property name="lineWidth">
-                 <number>1</number>
-                </property>
-                <property name="smallDecimalPoint">
-                 <bool>true</bool>
-                </property>
-                <property name="digitCount">
-                 <number>5</number>
-                </property>
-                <property name="segmentStyle">
-                 <enum>QLCDNumber::Filled</enum>
-                </property>
-                <property name="value" stdset="0">
-                 <double>0.000000000000000</double>
-                </property>
-               </widget>
-              </item>
               <item row="4" column="0">
                <widget class="QLabel" name="yawLabel">
                 <property name="text">
@@ -117,7 +79,7 @@
               <item row="1" column="0">
                <widget class="QLabel" name="boardTempLabel">
                 <property name="text">
-                 <string>Board temperature ˚C</string>
+                 <string>Board temperature </string>
                 </property>
                </widget>
               </item>
@@ -131,7 +93,7 @@
                 </property>
                 <property name="font">
                  <font>
-                  <pointsize>20</pointsize>
+                  <pointsize>16</pointsize>
                  </font>
                 </property>
                 <property name="alignment">
@@ -152,7 +114,7 @@
                 </property>
                 <property name="font">
                  <font>
-                  <pointsize>20</pointsize>
+                  <pointsize>16</pointsize>
                  </font>
                 </property>
                 <property name="alignment">
@@ -173,7 +135,34 @@
                 </property>
                 <property name="font">
                  <font>
-                  <pointsize>20</pointsize>
+                  <pointsize>16</pointsize>
+                 </font>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QLineEdit" name="boardTemp">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>150</width>
+                  <height>100</height>
+                 </size>
+                </property>
+                <property name="font">
+                 <font>
+                  <pointsize>16</pointsize>
                  </font>
                 </property>
                 <property name="alignment">
@@ -204,69 +193,6 @@
            <layout class="QVBoxLayout" name="verticalLayout_5">
             <item>
              <layout class="QGridLayout" name="gridLayout">
-              <item row="0" column="2">
-               <widget class="QSlider" name="exposureSlider">
-                <property name="minimum">
-                 <number>2300</number>
-                </property>
-                <property name="maximum">
-                 <number>7000</number>
-                </property>
-                <property name="singleStep">
-                 <number>1</number>
-                </property>
-                <property name="value">
-                 <number>4300</number>
-                </property>
-                <property name="sliderPosition">
-                 <number>4300</number>
-                </property>
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="1">
-               <widget class="QSpinBox" name="exposureSpinBox">
-                <property name="suffix">
-                 <string> us</string>
-                </property>
-                <property name="prefix">
-                 <string/>
-                </property>
-                <property name="minimum">
-                 <number>200</number>
-                </property>
-                <property name="maximum">
-                 <number>10000000</number>
-                </property>
-                <property name="value">
-                 <number>20000</number>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="2">
-               <widget class="QSlider" name="gainSlider">
-                <property name="minimum">
-                 <number>-4</number>
-                </property>
-                <property name="maximum">
-                 <number>38</number>
-                </property>
-                <property name="singleStep">
-                 <number>1</number>
-                </property>
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-                <property name="tickPosition">
-                 <enum>QSlider::TicksBelow</enum>
-                </property>
-                <property name="tickInterval">
-                 <number>2</number>
-                </property>
-               </widget>
-              </item>
               <item row="1" column="0">
                <widget class="QLabel" name="gainLabel">
                 <property name="text">
@@ -290,6 +216,47 @@
                 </property>
                 <property name="singleStep">
                  <double>1.000000000000000</double>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QSpinBox" name="exposureSpinBox">
+                <property name="suffix">
+                 <string> us</string>
+                </property>
+                <property name="prefix">
+                 <string/>
+                </property>
+                <property name="minimum">
+                 <number>200</number>
+                </property>
+                <property name="maximum">
+                 <number>10000000</number>
+                </property>
+                <property name="value">
+                 <number>20000</number>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QSlider" name="exposureSlider">
+                <property name="minimum">
+                 <number>2300</number>
+                </property>
+                <property name="maximum">
+                 <number>7000</number>
+                </property>
+                <property name="singleStep">
+                 <number>1</number>
+                </property>
+                <property name="value">
+                 <number>4300</number>
+                </property>
+                <property name="sliderPosition">
+                 <number>4300</number>
+                </property>
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
                 </property>
                </widget>
               </item>
@@ -317,6 +284,28 @@
                 </property>
                 <property name="singleStep">
                  <number>10</number>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QSlider" name="gainSlider">
+                <property name="minimum">
+                 <number>-4</number>
+                </property>
+                <property name="maximum">
+                 <number>38</number>
+                </property>
+                <property name="singleStep">
+                 <number>1</number>
+                </property>
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="tickPosition">
+                 <enum>QSlider::TicksBelow</enum>
+                </property>
+                <property name="tickInterval">
+                 <number>2</number>
                 </property>
                </widget>
               </item>
@@ -389,13 +378,6 @@
              <string/>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_6">
-             <item>
-              <widget class="QPushButton" name="openSensors">
-               <property name="text">
-                <string>Open sensor</string>
-               </property>
-              </widget>
-             </item>
              <item>
               <widget class="QPushButton" name="darkFrameButton">
                <property name="text">
