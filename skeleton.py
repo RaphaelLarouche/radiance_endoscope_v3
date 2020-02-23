@@ -63,10 +63,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.ui.exposureSpinBox.setKeyboardTracking(False)
         self.ui.gainDoubleSpinBox.setKeyboardTracking(False)
 
-        # Creation of a PyQT timer object for live data visualization
-        self.tim_camera = QtCore.QTimer(self)
-        self.tim_camera.timeout.connect(self.realtimedata_camera)  # Timer connection with camera
-
         # Connections ___________________________________________________________________
         self.ui.exposureSlider.valueChanged.connect(self.exposure_slider)
         self.ui.gainSlider.valueChanged.connect(self.gain_slider)
@@ -88,7 +84,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         # Custom signals from thread
         self.euler_thread.my_signal.connect(self.display_angle)
         self.camera_thread.my_signal.connect(self.plot_avg)
-        self.camera_thread.my_signal_temp.connect(self.ui.boardTemp.display)
+        self.camera_thread.my_signal_temp.connect(self.ui.boardTemp.setText)
 
     def start_realtimedata(self):
         """
@@ -116,47 +112,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             # Stopping acquisition
             print("Stopping acquisition...")
             self.cam.stop_acquisition()
-
-    def realtimedata_camera(self):
-        """
-        Function connected to the timer labeled tim.
-
-        :return:
-        """
-
-        if self.status:
-
-            # Camera data
-            self.update_camera()  # Changing parameters of camera
-            self.verify_temp()  # Verify if the board temperature is ok and updating lcd
-
-            self.cam.get_image(self.img)
-
-            data_raw = self.img.get_image_data_numpy()
-            data_raw = data_raw[::-1, :]
-
-            # Metadata in dictionary
-            met_dict = self.metadata_xiMU(self.img)  # Metadata in dictionary
-
-            radinstance = radiance.Radiance(data_raw, met_dict, "air", "test")
-            radinstance.absolute_radiance()
-            radinstance.makeradiancemap([0, 180], [0, 180], angular_res=0.25)
-
-            azi_avg = radinstance.azimuthal_integration()
-
-            # Update image
-            #self.ui.visualisationWindow.setImage(data_raw.T)
-            #self.ui.visualisationWindow.setImage(radmap.T)
-
-            self.plot_avg(radinstance.zenith_vect * 180/np.pi, azi_avg[:, 0], azi_avg[:, 1], azi_avg[:, 2])
-
-            # # IMU sensor data
-            # xAngle, yAngle, zAngle = self.IMU.kalman_filter()  # xAngle - roll, yAngle - pitch, zAngle - Yaw
-            # self.display_angle(xAngle, yAngle, zAngle)   # Showing angle
-
-        else:
-            raise ValueError("No devices found.")
-
 
     def exposure_slider_to_spinbox(self, slider_val):
         slider_val /= 1000  # 1x10-4 de resolution --> 1x10-8 pour avoir 1 entre 10 000 000 et 9 999 999
@@ -228,7 +183,9 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 self.folder_name_changed()
 
             else:
-                raise FileExistsError("Directory not empty")
+                #raise FileExistsError("Directory not empty")
+                self.ui.errorlog.setText("Directory not empty")
+
 
     def folder_name_changed(self):
 
@@ -253,10 +210,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         :param zAngle:
         :return:
         """
-        # self.ui.roll.display("{0:.2f}".format(xAngle))
-        # self.ui.pitch.display("{0:.2f}".format(yAngle))
-        # self.ui.yaw.display("{0:.2f}".format(zAngle))
-
         self.ui.roll.setText("{0:.3f} ˚".format(xAngle))
         self.ui.pitch.setText("{0:.3f} ˚".format(yAngle))
         self.ui.yaw.setText("{0:.3f} ˚".format(zAngle))
@@ -337,9 +290,11 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 if cond:
                     self.ui.live.setChecked(True)
             else:
-                raise FileExistsError("Take darkframe before measurements.")  # Error to be changed
+                #raise FileExistsError("Take darkframe before measurements.")  # Error to be changed
+                self.ui.errorlog.setText("Dark frame does not appear to be acquire.")
         else:
-            raise IsADirectoryError("No directory selected.")
+            #raise IsADirectoryError("No directory selected.")
+            self.ui.errorlog.setText("No directory selected.")
 
     def darkframe_button(self):
         """
@@ -364,13 +319,16 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 if cond2:
                     self.ui.live.setChecked(True)
             else:
-                raise FileExistsError("Dark frame already exists.")
+                #raise FileExistsError("Dark frame already exists.")
+                self.ui.errorlog.setText("Dark frame already exists.")
         else:
-            raise IsADirectoryError("No directory selected.")
+            #raise IsADirectoryError("No directory selected.")
+            self.ui.errorlog.setText("No directory selected.")
 
     def verify_temp(self):
         temp = self.cam.get_sensor_board_temp()
-        self.ui.boardTemp.display(temp)
+
+        self.ui.boardTemp.setText("{0:.3f} ˚C".format(temp))
 
         if temp >= 65:
             raise ValueError("Board temperature exceeds 65˚C")

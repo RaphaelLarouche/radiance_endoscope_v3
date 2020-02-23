@@ -58,6 +58,8 @@ class CameraThread(QtCore.QThread):
         while self.running:
             self.update_camera()
 
+            self.verify_temp()
+
             self.cam.get_image(self.img)
 
             data_raw = self.img.get_image_data_numpy()

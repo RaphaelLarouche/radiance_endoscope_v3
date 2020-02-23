@@ -6,9 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>887</width>
-    <height>764</height>
+    <width>808</width>
+    <height>593</height>
    </rect>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>16777215</width>
+    <height>900</height>
+   </size>
   </property>
   <property name="windowTitle">
    <string>Spectral radiance</string>
@@ -23,15 +29,15 @@
          <item>
           <widget class="QGroupBox" name="sensorInfo">
            <property name="title">
-            <string>Sensor information</string>
+            <string>Sensor </string>
            </property>
            <layout class="QHBoxLayout" name="horizontalLayout_5">
             <item>
              <widget class="PlotWidget" name="visualisationWindow">
               <property name="minimumSize">
                <size>
-                <width>400</width>
-                <height>200</height>
+                <width>200</width>
+                <height>50</height>
                </size>
               </property>
              </widget>
@@ -93,7 +99,7 @@
                 </property>
                 <property name="font">
                  <font>
-                  <pointsize>16</pointsize>
+                  <pointsize>14</pointsize>
                  </font>
                 </property>
                 <property name="alignment">
@@ -114,7 +120,7 @@
                 </property>
                 <property name="font">
                  <font>
-                  <pointsize>16</pointsize>
+                  <pointsize>14</pointsize>
                  </font>
                 </property>
                 <property name="alignment">
@@ -135,7 +141,7 @@
                 </property>
                 <property name="font">
                  <font>
-                  <pointsize>16</pointsize>
+                  <pointsize>14</pointsize>
                  </font>
                 </property>
                 <property name="alignment">
@@ -162,7 +168,7 @@
                 </property>
                 <property name="font">
                  <font>
-                  <pointsize>16</pointsize>
+                  <pointsize>14</pointsize>
                  </font>
                 </property>
                 <property name="alignment">
@@ -183,7 +189,7 @@
        <item>
         <widget class="QGroupBox" name="acParameters">
          <property name="title">
-          <string>Acquisition parameters</string>
+          <string>Acquisition </string>
          </property>
          <property name="flat">
           <bool>false</bool>
@@ -270,7 +276,7 @@
               <item row="3" column="0">
                <widget class="QLabel" name="depthlabel">
                 <property name="text">
-                 <string>Depth</string>
+                 <string>Current depth</string>
                 </property>
                </widget>
               </item>
@@ -309,18 +315,14 @@
                 </property>
                </widget>
               </item>
-             </layout>
-            </item>
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_2">
-              <item>
+              <item row="2" column="0">
                <widget class="QLabel" name="binlabel">
                 <property name="text">
                  <string>Binning</string>
                 </property>
                </widget>
               </item>
-              <item>
+              <item row="2" column="1">
                <widget class="QComboBox" name="binComboBox">
                 <property name="acceptDrops">
                  <bool>false</bool>
@@ -350,6 +352,9 @@
              </layout>
             </item>
             <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_2"/>
+            </item>
+            <item>
              <layout class="QHBoxLayout" name="horizontalLayout_8">
               <item>
                <widget class="QRadioButton" name="water">
@@ -369,6 +374,9 @@
                </widget>
               </item>
              </layout>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="errorlog"/>
             </item>
            </layout>
           </item>
@@ -431,7 +439,7 @@
        <item row="1" column="1">
         <widget class="QLabel" name="labelfname">
          <property name="text">
-          <string>Folder name</string>
+          <string>Folder name:</string>
          </property>
         </widget>
        </item>
