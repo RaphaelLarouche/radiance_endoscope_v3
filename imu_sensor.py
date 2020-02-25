@@ -347,7 +347,6 @@ class MinIMUv5(MinIMU_v5_pi):
             Gza += 2 * np.pi
 
         # This combines a LPF on phi, rho, and theta with a HPF on the Gyro values
-        #tau = dt * 10
         alpha = self.tau / (self.tau + dt)
         self.yaw_hat = (alpha * Gza) + ((1 - alpha) * yaw)
 

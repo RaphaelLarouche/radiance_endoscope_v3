@@ -103,7 +103,7 @@ class Radiance(cameracontrol.ProcessImage):
 
         if len(self.image.shape) == 2:
 
-            im_nn = self.darksub(self.image.astype(float), "metadata")  # 1. Dark frame subtraction
+            im_nn = self.darksub(self.image.astype(float), "metadata")   # 1. Dark frame subtraction (USING METADATA FOR NOW)
             im_norm = self.exposure_normalization(self.gain_normalization(im_nn))   # 2. Exposure and gain normalization
             im_dws = self.dwnsampling(im_norm, "BGGR")  # 3. Downsampling
 

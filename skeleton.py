@@ -28,16 +28,14 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         # Attributes initialized
         self.savepath = False
         self.foldername = "/" + self.ui.fname.text()
-
         self.bin_choice = {"2x2": "XI_DWN_2x2", "4x4": "XI_DWN_4x4"}
+        self.orientation = np.zeros(3)
 
         # Create ximea Camera instance
         self.status = False
         self.cam = xiapi.Camera()
-
         # Create ximea Image instance to store image data and metadata
         self.img = xiapi.Image()
-
         print("Opening camera")
         self.cam.open_device_by("XI_OPEN_BY_SN", "16990159")
         self.status = True
@@ -46,18 +44,21 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.bin = self.bin_choice[self.ui.binComboBox.currentText()]
         self.exp = self.ui.exposureSpinBox.value()
         self.gain = self.ui.gainDoubleSpinBox.value()
+        self.medium = ""
+        self.water_air_radiobutton(self.ui.water)
+        self.water_air_radiobutton(self.ui.air)
 
         # Threads
-        self.euler_thread = threadfile.Euler()
-        self.camera_thread = threadfile.CameraThread(self.imformat, self.bin, self.exp, self.gain, self.cam)
+        self.euler_thread = threadfile.Euler()  # IMU
+        self.camera_thread = threadfile.CameraThread(self.imformat, self.bin, self.exp, self.gain, self.cam, self.medium)  # CAM
 
         # Updating pyqtgraph graph appearance
         self.pred = self.pyqtplot(np.array([0]), np.array([0]), "611 nm", "r")
         self.pgreen = self.pyqtplot(np.array([0]), np.array([0]), "530 nm", "g")
         self.pblue = self.pyqtplot(np.array([0]), np.array([0]), "468 nm", "b")
 
-        self.ui.visualisationWindow.setLabel("left", "D.N normalized", size="2pt")
-        self.ui.visualisationWindow.setLabel("bottom", "Zenith angle [˚]", size="2pt")
+        self.ui.visualisationWindow.setLabel("left", "D.N normalized", size=2, color="red")
+        self.ui.visualisationWindow.setLabel("bottom", "Zenith angle [˚]", size=2, color="red")
 
         # Spinbox with keyboard tracking disable
         self.ui.exposureSpinBox.setKeyboardTracking(False)
@@ -81,12 +82,20 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         self.ui.fname.editingFinished.connect(self.folder_name_changed)
 
+        self.ui.air.toggle.connect(self.water_air_radiobutton(self.ui.air))
+        self.ui.water.toggle.connect(self.water_air_radiobutton(self.ui.water))
+
         # Custom signals from thread
         self.euler_thread.my_signal.connect(self.display_angle)
         self.camera_thread.my_signal.connect(self.plot_avg)
-        self.camera_thread.my_signal_temp.connect(self.ui.boardTemp.setText)
+        self.camera_thread.my_signal_temperature.connect(self.ui.boardTemp.setText)
+        self.camera_thread.my_signal_saturation.connect(self.ui.errorlog.setText)
 
-    def start_realtimedata(self):
+        # Starting IMU Thread (Always running!)
+        self.euler_thread.running = True
+        self.euler_thread.start()
+
+    def start_realtimedata(self, b):
         """
         Function executed when live checkbox is toggled. The function starts the timer (label tim).
 
@@ -102,16 +111,29 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.camera_thread.start()
 
             # IMU thread
-            self.euler_thread.running = True
-            self.euler_thread.start()
+            #self.euler_thread.running = True
+            #self.euler_thread.start()
 
         else:
             self.camera_thread.running = False
-            self.euler_thread.running = False
+            #self.euler_thread.running = False
 
             # Stopping acquisition
             print("Stopping acquisition...")
             self.cam.stop_acquisition()
+
+    def water_air_radiobutton(self, b):
+        if b.text() == "Water":
+            if b.isChecked():
+                print(b.text())
+                self.camera_thread.medium = b.text()
+                self.medium = b.text()
+
+        if b.text() == "Air":
+            if b.isChecked():
+                print(b.text())
+                self.camera_thread.medium = b.text()
+                self.medium = b.text()
 
     def exposure_slider_to_spinbox(self, slider_val):
         slider_val /= 1000  # 1x10-4 de resolution --> 1x10-8 pour avoir 1 entre 10 000 000 et 9 999 999
@@ -183,11 +205,13 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 self.folder_name_changed()
 
             else:
-                #raise FileExistsError("Directory not empty")
                 self.ui.errorlog.setText("Directory not empty")
 
-
     def folder_name_changed(self):
+        """
+        Get called when the user enter a new folder name.
+        :return:
+        """
 
         dirname = self.savepath + "/" + self.ui.fname.text()
 
@@ -200,10 +224,11 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             print("Directory ", dirname, " Created ")
         else:
             print("Directory ", dirname, " already exists")
+            self.ui.errorlog.setText("Directory " + dirname + " already exists")
 
     def display_angle(self, xAngle, yAngle, zAngle):
         """
-        Display roll, yaw and pitch in the graphical interface.
+        Display roll, yaw and pitch.
 
         :param xAngle:
         :param yAngle:
@@ -214,8 +239,10 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.ui.pitch.setText("{0:.3f} ˚".format(yAngle))
         self.ui.yaw.setText("{0:.3f} ˚".format(zAngle))
 
-    @staticmethod
-    def metadata_xiMU(structure):
+        # Storing orientation
+        self.orientation[0], self.orientation[1], self.orientation[2] = xAngle, yAngle, zAngle  # Roll, pitch, yaw
+
+    def metadata_xiMU(self, structure):
         """"
         Construction of xiMU metadata dictionary.
         """
@@ -224,6 +251,12 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             for i in structure._fields_:
                 if isinstance(getattr(structure, i[0]), int) or isinstance(getattr(structure, i[0]), float):
                     met_dict[i[0]] = getattr(structure, i[0])
+
+            # Adding roll, yaw and pitch in degrees.
+            met_dict["orientation roll"] = self.orientation[0]
+            met_dict["orientation pitch"] = self.orientation[1]
+            met_dict["orientation yaw"] = self.orientation[2]
+
             return met_dict
         else:
             raise ValueError("Not the type of metadata expected. Should be a xiapi.Ximage instance.")
@@ -283,17 +316,15 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 # Save
                 today = datetime.datetime.utcnow()
                 depth = self.ui.depth.value()
-                path = self.savepath + self.foldername + "/IMG_" + today.strftime("%Y%m%d_%H%M%S_UTC_") + str(depth) + ".tif"
+                path = self.savepath + self.foldername + "/IMG_" + today.strftime("%Y%m%d_%H%M%S_UTC_") + str(depth) + "cm" + ".tif"
 
                 self.saveTIFF_xiMU(path, image, metadata)
 
                 if cond:
                     self.ui.live.setChecked(True)
             else:
-                #raise FileExistsError("Take darkframe before measurements.")  # Error to be changed
                 self.ui.errorlog.setText("Dark frame does not appear to be acquire.")
         else:
-            #raise IsADirectoryError("No directory selected.")
             self.ui.errorlog.setText("No directory selected.")
 
     def darkframe_button(self):
@@ -319,10 +350,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 if cond2:
                     self.ui.live.setChecked(True)
             else:
-                #raise FileExistsError("Dark frame already exists.")
                 self.ui.errorlog.setText("Dark frame already exists.")
         else:
-            #raise IsADirectoryError("No directory selected.")
             self.ui.errorlog.setText("No directory selected.")
 
     def verify_temp(self):

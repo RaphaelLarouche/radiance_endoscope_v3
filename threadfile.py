@@ -28,7 +28,7 @@ class Euler(QtCore.QThread):
         while self.running:
             euler_angles = self.sensor_imu.kalman_filter()
             self.my_signal.emit(euler_angles[0], euler_angles[1], euler_angles[2])
-            time.sleep(0.004)
+            time.sleep(0.004)  # To be changed?
 
 
 class CameraThread(QtCore.QThread):
@@ -37,9 +37,10 @@ class CameraThread(QtCore.QThread):
     """
 
     my_signal = QtCore.pyqtSignal(np.ndarray, np.ndarray, np.ndarray, np.ndarray)
-    my_signal_temp = QtCore.pyqtSignal(str)
+    my_signal_temperature = QtCore.pyqtSignal(str)
+    my_signal_saturation = QtCore.pyqtSignal(str)
 
-    def __init__(self, imformat, bin, exp, gain, cam):
+    def __init__(self, imformat, bin, exp, gain, cam, medium):
         QtCore.QThread.__init__(self)
 
         self.cam = cam
@@ -50,6 +51,9 @@ class CameraThread(QtCore.QThread):
         self.bin = bin
         self.exp = exp
         self.gain = gain
+
+        # Medium
+        self.medium = medium
 
         self.running = False
 
@@ -65,10 +69,13 @@ class CameraThread(QtCore.QThread):
             data_raw = self.img.get_image_data_numpy()
             data_raw = data_raw[::-1, :]
 
+            if np.any(data_raw >= 2**12):
+                self.my_signal_saturation.emit("Image saturation.")
+
             # Metadata in dictionary
             met_dict = self.metadata_xiMU(self.img)
 
-            radclass = radiance.Radiance(data_raw, met_dict, "air", "test")  # Values to be changed
+            radclass = radiance.Radiance(data_raw, met_dict, self.medium.lower(), "test")  # Values to be changed
             radclass.absolute_radiance()
             radclass.makeradiancemap([0, 180], [0, 180], angular_res=0.5)
 
@@ -76,7 +83,7 @@ class CameraThread(QtCore.QThread):
 
             self.my_signal.emit(radclass.zenith_vect * 180/np.pi, azi_average[:, 0], azi_average[:, 1], azi_average[:, 2])
 
-            time.sleep(1)  # 1 second rep
+            time.sleep(0.5)  # 0.5 second repetition
 
     def update_camera(self):
         self.cam.set_imgdataformat(self.imformat)  # Image format
@@ -101,7 +108,7 @@ class CameraThread(QtCore.QThread):
 
     def verify_temp(self):
         temp = self.cam.get_sensor_board_temp()
-        self.my_signal_temp.emit("{0:.3f} ˚C".format(temp))
+        self.my_signal_temperature.emit("{0:.3f} ˚C".format(temp))
 
         if temp >= 65:
             raise ValueError("Board temperature exceeds 65˚C")
