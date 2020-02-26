@@ -44,9 +44,10 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.bin = self.bin_choice[self.ui.binComboBox.currentText()]
         self.exp = self.ui.exposureSpinBox.value()
         self.gain = self.ui.gainDoubleSpinBox.value()
-        self.medium = ""
-        self.water_air_radiobutton(self.ui.water)
-        self.water_air_radiobutton(self.ui.air)
+        if self.ui.water.isChecked():
+            self.medium = self.ui.water.text()
+        else:
+            self.medium = self.ui.air.text()
 
         # Threads
         self.euler_thread = threadfile.Euler()  # IMU
@@ -82,8 +83,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         self.ui.fname.editingFinished.connect(self.folder_name_changed)
 
-        self.ui.air.toggle.connect(self.water_air_radiobutton(self.ui.air))
-        self.ui.water.toggle.connect(self.water_air_radiobutton(self.ui.water))
+        self.ui.air.toggled.connect(self.water_air_radiobutton)
+        self.ui.water.toggled.connect(self.water_air_radiobutton)
 
         # Custom signals from thread
         self.euler_thread.my_signal.connect(self.display_angle)
@@ -122,18 +123,15 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             print("Stopping acquisition...")
             self.cam.stop_acquisition()
 
-    def water_air_radiobutton(self, b):
-        if b.text() == "Water":
-            if b.isChecked():
-                print(b.text())
-                self.camera_thread.medium = b.text()
-                self.medium = b.text()
-
-        if b.text() == "Air":
-            if b.isChecked():
-                print(b.text())
-                self.camera_thread.medium = b.text()
-                self.medium = b.text()
+    def water_air_radiobutton(self):
+        if self.ui.water.isChecked():
+                print(self.ui.water.text())
+                self.camera_thread.medium = self.ui.water.text()
+                self.medium = self.ui.water.text()
+        if self.ui.air.isChecked():
+                print(self.ui.air.text())
+                self.camera_thread.medium = self.ui.air.text()
+                self.medium = self.ui.air.text()
 
     def exposure_slider_to_spinbox(self, slider_val):
         slider_val /= 1000  # 1x10-4 de resolution --> 1x10-8 pour avoir 1 entre 10 000 000 et 9 999 999

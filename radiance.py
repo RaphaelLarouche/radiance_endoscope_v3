@@ -39,7 +39,6 @@ class Radiance(cameracontrol.ProcessImage):
         :param air_or_water:
         """
         # Importation of calibration data
-        #genpath = "/Users/raphaellarouche/PycharmProjects/CalibrationVillefranche/Prototype/"
         genpath = "calibrationfiles/"
 
         # 1. Absolute radiance calibration coefficients
@@ -49,9 +48,7 @@ class Radiance(cameracontrol.ProcessImage):
         # Air
         if medium == "air":
             # 3. Geometric calibration
-            #geo = np.load(genpath + "geometric/geometric_calibrationfiles_cb_air/geo_calibration_2x2_air_20191211_1714.npz")
-            #geo = np.load(genpath + "geometric/geometric_calibrationfiles_cb_air/geo_calibration_2x2_air_20191211_2152.npz")
-            geo = np.load(genpath + "geo_calibration_2x2_air_20200218_2304.npz")
+            geo = np.load(genpath + "geo_calibration_2x2_air_20200220_1908.npz")
 
             # 4. Roll=off calibration
             # After Villefranche
@@ -61,7 +58,7 @@ class Radiance(cameracontrol.ProcessImage):
         # Water
         elif medium == "water":
             # 3. Geometric calibration
-            geo = np.load(genpath + "geo_calibration_2x2_water_20191212_1721.npz")
+            geo = np.load(genpath + "geo_calibration_2x2_water_20200225_2052.npz")
 
             # 4. Roll-off calibration
             # SAME AS in the AIR ******* TO BE CHANGED
