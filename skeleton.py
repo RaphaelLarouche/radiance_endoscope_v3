@@ -401,5 +401,5 @@ if __name__ == "__main__":
 
     app = QtWidgets.QApplication(sys.argv)
     dialog = MyDialog()
-    dialog.showMaximized()
+    dialog.show()
     sys.exit(app.exec_())

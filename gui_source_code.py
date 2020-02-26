@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_mainWindow(object):
     def setupUi(self, mainWindow):
         mainWindow.setObjectName("mainWindow")
-        mainWindow.resize(808, 593)
+        mainWindow.resize(905, 559)
         mainWindow.setMaximumSize(QtCore.QSize(16777215, 900))
         self.verticalLayout = QtWidgets.QVBoxLayout(mainWindow)
         self.verticalLayout.setObjectName("verticalLayout")
@@ -26,7 +26,7 @@ class Ui_mainWindow(object):
         self.horizontalLayout_5 = QtWidgets.QHBoxLayout(self.sensorInfo)
         self.horizontalLayout_5.setObjectName("horizontalLayout_5")
         self.visualisationWindow = PlotWidget(self.sensorInfo)
-        self.visualisationWindow.setMinimumSize(QtCore.QSize(200, 50))
+        self.visualisationWindow.setMinimumSize(QtCore.QSize(200, 25))
         self.visualisationWindow.setObjectName("visualisationWindow")
         self.horizontalLayout_5.addWidget(self.visualisationWindow)
         self.line = QtWidgets.QFrame(self.sensorInfo)

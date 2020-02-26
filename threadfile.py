@@ -72,6 +72,8 @@ class CameraThread(QtCore.QThread):
             if np.any(data_raw >= (2**12) - 1):
                 numpixel = np.sum(data_raw >= (2**12) - 1)
                 self.my_signal_saturation.emit("{0} pixels saturated.".format(numpixel))
+            else:
+                self.my_signal_saturation.emit("No pixel saturated.")
 
             # Metadata in dictionary
             met_dict = self.metadata_xiMU(self.img)
