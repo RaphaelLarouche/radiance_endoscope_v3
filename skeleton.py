@@ -34,8 +34,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         # Create ximea Camera instance
         self.status = False
         self.cam = xiapi.Camera()
-        # Create ximea Image instance to store image data and metadata
-        self.img = xiapi.Image()
+
+        self.img = xiapi.Image()  # Create ximea Image instance
         print("Opening camera")
         self.cam.open_device_by("XI_OPEN_BY_SN", "16990159")
         self.status = True
@@ -44,6 +44,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.bin = self.bin_choice[self.ui.binComboBox.currentText()]
         self.exp = self.ui.exposureSpinBox.value()
         self.gain = self.ui.gainDoubleSpinBox.value()
+
         if self.ui.water.isChecked():
             self.medium = self.ui.water.text()
         else:
@@ -239,6 +240,15 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         # Storing orientation
         self.orientation[0], self.orientation[1], self.orientation[2] = xAngle, yAngle, zAngle  # Roll, pitch, yaw
+        self.camera_thread.orientation[0], self.camera_thread.orientation[1], self.camera_thread.orientation[2] = xAngle, yAngle, zAngle
+
+    def update_camera(self):
+
+        self.cam.set_imgdataformat(self.imformat)  # Image format
+        self.cam.set_downsampling_type("XI_BINNING")
+        self.cam.set_downsampling(self.bin)  # Downsampling
+        self.cam.set_exposure(self.exp)  # Exposure time
+        self.cam.set_gain(self.gain)  # Gain
 
     def metadata_xiMU(self, structure):
         """"
@@ -255,17 +265,12 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             met_dict["orientation pitch"] = self.orientation[1]
             met_dict["orientation yaw"] = self.orientation[2]
 
+            # Medium
+            met_dict["medium"] = self.medium.lower()
+
             return met_dict
         else:
             raise ValueError("Not the type of metadata expected. Should be a xiapi.Ximage instance.")
-
-    def update_camera(self):
-
-        self.cam.set_imgdataformat(self.imformat)  # Image format
-        self.cam.set_downsampling_type("XI_BINNING")
-        self.cam.set_downsampling(self.bin)  # Downsampling
-        self.cam.set_exposure(self.exp)  # Exposure time
-        self.cam.set_gain(self.gain)  # Gain
 
     def acquisition(self):
         """

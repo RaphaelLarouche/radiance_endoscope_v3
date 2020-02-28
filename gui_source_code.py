@@ -135,7 +135,7 @@ class Ui_mainWindow(object):
         self.gridLayout.addWidget(self.depthlabel, 3, 0, 1, 1)
         self.depth = QtWidgets.QSpinBox(self.acParameters)
         self.depth.setMaximum(400)
-        self.depth.setSingleStep(10)
+        self.depth.setSingleStep(5)
         self.depth.setObjectName("depth")
         self.gridLayout.addWidget(self.depth, 3, 1, 1, 1)
         self.gainSlider = QtWidgets.QSlider(self.acParameters)

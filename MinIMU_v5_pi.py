@@ -8,7 +8,7 @@
 	Create getYaw() and getAngle() functions
 """	
 
-import smbus2 as smbus
+import smbus as smbus
 import time
 import math
 import _thread as thread

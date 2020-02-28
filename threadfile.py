@@ -21,6 +21,7 @@ class Euler(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.sensor_imu = imu_sensor.MinIMUv5()
         self.sensor_imu.acc_offsets()
+        self.sensor_imu.magnetometer_calibration()
         self.running = False
 
     def run(self):
@@ -55,6 +56,10 @@ class CameraThread(QtCore.QThread):
         # Medium
         self.medium = medium
 
+        # Orientation
+        self.orientation = np.zeros(3)
+
+        # Condition to run the function run
         self.running = False
 
     def run(self):
@@ -73,14 +78,15 @@ class CameraThread(QtCore.QThread):
                 numpixel = np.sum(data_raw >= (2**12) - 1)
                 self.my_signal_saturation.emit("{0} pixels saturated.".format(numpixel))
             else:
-                self.my_signal_saturation.emit("No pixel saturated.")
+                self.my_signal_saturation.emit("0 pixel saturated.")
 
             # Metadata in dictionary
             met_dict = self.metadata_xiMU(self.img)
 
             radclass = radiance.Radiance(data_raw, met_dict, self.medium.lower(), "test")  # Values to be changed
             radclass.absolute_radiance()
-            radclass.makeradiancemap([0, 180], [0, 180], angular_res=0.5)
+            radclass.makeradiancemap([0.5, 179.5], [0.5, 179.5], angular_res=0.5)
+            #radclass.makeradiancemap_am(self.medium, self.orientation, angular_res=0.5)
 
             azi_average = radclass.azimuthal_integration()
 

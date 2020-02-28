@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Amilioration of the class minimu9v5 found on github.
+Building on the class minimu9v5 from Github.
 """
 
 # Importation of standard modules
@@ -11,7 +11,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 import glob
 
-import smbus2 as smbus
+import smbus as smbus
 import time
 import math
 import _thread as thread
@@ -67,8 +67,10 @@ class MinIMUv5(MinIMU_v5_pi):
         self.P = np.eye(4)
         self.Q = np.eye(4)
         self.R = np.eye(2) * 2
+        #self.R = np.eye(2) * 0.01
 
         Qmul = np.array([2, 0.03, 2, 0.03])
+        #Qmul = np.array([10, 10, 10, 10])
         self.Q *= Qmul[:, None]
 
         self.x_estimate = np.zeros((4, 1))
@@ -92,7 +94,7 @@ class MinIMUv5(MinIMU_v5_pi):
             print("Calibration starts in {0:d} s".format(seconds - i))
             time.sleep(1)
 
-    def magnetometer_calibratation(self):
+    def magnetometer_calibration(self):
 
         # Data acquisition
         s = np.array([])
@@ -216,7 +218,7 @@ class MinIMUv5(MinIMU_v5_pi):
         time_tuple = time.gmtime()  # UTC time
         time_string = time.strftime("%d %b %Y, %H:%M:%S", time_tuple)
 
-        np.savez("magnetometer_calib.npz", date=time_string, A=self.A, b=self.b)
+        np.savez("magnetometer_calib/magnetometer_calib.npz", date=time_string, A=self.A, b=self.b)
 
     def acc_offsets(self, show=False):
         """
@@ -305,7 +307,7 @@ class MinIMUv5(MinIMU_v5_pi):
         """
         return np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
 
-    def kalman_filter(self):
+    def kalman_filter(self, disp=False):
         """
         For roll and pitch angles.
 
@@ -380,7 +382,8 @@ class MinIMUv5(MinIMU_v5_pi):
         self.P = (np.eye(4) - K.dot(C)).dot(self.P)
 
         # Printing results
-        #print("Roll: " + str(rhat) + " Pitch: " + str(phat) + " Yaw: " + str(yhat))
+        if disp:
+            print("Roll: " + str(rhat) + " Pitch: " + str(phat) + " Yaw: " + str(yhat))
 
         # Update time for dt calculations
         self.timekalman = time.time()
@@ -459,11 +462,12 @@ class MinIMUv5(MinIMU_v5_pi):
     def track_angle_thread_kalman(self):
         while True:
             self.kalman_filter()
+            #time.sleep(0.5)
             time.sleep(0.004)
 
     def start_anim(self):
         self.fig, self.ax = plt.subplots(1, 3, figsize=(8, 5))
-        self.acc_offsets()
+        #self.acc_offsets()
 
         self.timeanim = time.time()
         anim = animation.FuncAnimation(self.fig, self.anim_, interval=100)  # Updated every 100 ms
@@ -489,8 +493,8 @@ class MinIMUv5(MinIMU_v5_pi):
 if __name__ == "__main__":
     sens = MinIMUv5()
 
-    #sens.magnetometer_calibration()
+    sens.magnetometer_calibration()  # calibration
 
     #sens.start_anim()
 
-    sens.trackAngleKalman()
+    #sens.trackAngleKalman()

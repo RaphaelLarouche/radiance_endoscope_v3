@@ -48,7 +48,10 @@ class ProcessImage:
         dc = {}
         for i in newstri[0:-2:1]:
             key, val = i.split(":")
-            dc[str(key.strip()[1:-1:1])] = float(val.strip())
+            if str(key.strip()[1:-1:1]) == "medium":
+                dc[str(key.strip()[1:-1:1])] = str(val.strip()[1:-1:1])
+            else:
+                dc[str(key.strip()[1:-1:1])] = float(val.strip())
         return dc
 
     @staticmethod

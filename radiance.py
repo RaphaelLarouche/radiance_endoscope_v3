@@ -191,6 +191,95 @@ class Radiance(cameracontrol.ProcessImage):
 
         return new_im
 
+    def makeradiancemap_am(self, medium, orientation, angular_res=1.0):
+        """
+        New version of radiance mapping. It now uses information about the medium to set the camera limits in zenith
+        and azimuth as well as the roll, pitch and yaw angles.
+
+        :param medium:
+        :param orientation:
+        :param angular_res:
+        :return:
+        """
+
+        if len(self.imradiance.shape) == 3:
+
+            degradconst = pi/180
+
+            roll = orientation[0] * degradconst
+            pitch = orientation[1] * degradconst
+            yaw = orientation[2] * degradconst
+
+            if medium.lower() == "air":
+                cam_zen_limits = np.array([0.5, 179.5]) * degradconst  # Prevent division by 0 ??
+                #cam_az_limits = np.array([-89.5, 89.5]) * degradconst
+                cam_az_limits = np.array([0.5, 179.5]) * degradconst
+
+            elif medium.lower() == "water":
+                cam_zen_limits = np.array([10, 170]) * degradconst
+                cam_az_limits = np.array([10, 170]) * degradconst
+            else:
+                raise ValueError("Invalid argument medium.")
+
+            # Building meshgrid
+            nb_zen = np.round(abs(cam_zen_limits[1] - cam_zen_limits[0]) / (angular_res * degradconst)) + 1
+            nb_az = np.round(abs(cam_az_limits[1] - cam_az_limits[0]) / (angular_res * degradconst)) + 1
+
+            zen_vector = np.linspace(cam_zen_limits[0], cam_zen_limits[1], nb_zen.astype(int))  # rads
+            az_vector = np.linspace(cam_az_limits[0], cam_az_limits[1], nb_az.astype(int))  # rads
+
+            az, zen = np.meshgrid(az_vector, zen_vector)  # Meshgrid
+
+            # Converting into world coordinates with Z pointing upward
+            px, py, pz = self.points_3d(zen, az)
+
+            theta = np.arccos(py)
+            phi = np.arctan2(pz, px)
+
+            # Dewarping
+            # dewarped = np.zeros((theta.shape[0], theta.shape[1], 3))
+            #
+            # for i in range(len(dewarped.shape)):
+            #     dewarped[:, :, i] = self.dewarp(self.imradiance[:, :, i], theta, phi)
+
+            # Rotation of coordinates according to IMU data
+            matrix_rotation = np.dot(np.dot(self.rz(yaw), self.ry(pitch)), self.rx(roll))
+            npx, npy, npz = self.rotation(px, py, pz, matrix_rotation)
+
+            azimuth_array = np.arctan2(npy, npx)
+            zenith_array = np.arccos(npz)
+
+            print(np.min(np.min(zenith_array)) * 180/pi)
+            print(np.max(np.max(zenith_array)) * 180/pi)
+
+            print(np.min(np.min(azimuth_array)) * 180 / pi)
+            print(np.max(np.max(azimuth_array)) * 180 / pi)
+
+
+            plt.figure()
+            plt.imshow(azimuth_array*180 / pi)
+
+            plt.figure()
+            plt.imshow(zenith_array*180 / pi)
+
+            fig20 = plt.figure()
+            ax20 = fig20.add_subplot(111, projection="3d")
+
+            ax20.scatter(npx, npy, npz)
+            ax20.set_xlabel("Xaxis")
+            ax20.set_ylabel("Yaxis")
+            ax20.set_zlabel("Zaxis")
+
+            # 5. Storing new radiance map image
+            self.radiance_map = dewarped
+            self.zenith_vect = zenith_array[:, 0]
+            self.azimuth_vect = azimuth_array[0, :]
+
+            return dewarped
+
+        else:
+            raise ValueError("Demosaic should be done before building radiance mapping.")
+
     def makeradiancemap(self, zeni_lims, azi_lims, angular_res=1.0):
        """
        
@@ -231,6 +320,7 @@ class Radiance(cameracontrol.ProcessImage):
             self.radiance_map = dewarped
             self.zenith_vect = zenith_vector
             self.azimuth_vect = azimuth_vector
+
        else:
             raise ValueError("Demosaic should be done before building the radiance 2d map.")
 
@@ -530,17 +620,33 @@ if __name__ == "__main__":
     imRAD = RAD.absolute_radiance()
     imRADmap = RAD.makeradiancemap([0, 180], [0, 180], angular_res=0.25)
 
+    imRADmap2 = RAD.makeradiancemap_am("air", np.array([45, 0, 0]), angular_res=5)
+
     azi_avg = RAD.azimuthal_integration()
     tf = time.time()
     dt = tf - t0
-    print(dt)
+    #print(dt)
+
+    # Test limits of field of view
+    # theta_pi1 = np.array([0, 0])
+    # theta_phi2 = np.array([pi/2, 2*pi])
+    #
+    # for j in [theta_pi1, theta_phi2]:
+    #     px, py, pz = RAD.points_3d(j[0], j[1])
+    #     npx, npy, npz = RAD.rotation(px, py, pz, RAD.rx(pi/2))
+    #
+    #     theta = np.arccos(npz)
+    #     phi = np.arctan2(npy, npx)
+    #
+    #     print(theta)
+    #     print(phi)
 
     plt.figure()
     plt.imshow(imRADmap[:, :, 0])
 
     plt.figure()
-    plt.plot(RAD.zenith_vect, azi_avg[:, 0], "r")
-    plt.plot(RAD.zenith_vect, azi_avg[:, 1], "g")
-    plt.plot(RAD.zenith_vect, azi_avg[:, 2], "b")
+    plt.plot(RAD.zenith_vect * 180/pi, azi_avg[:, 0], "r")
+    plt.plot(RAD.zenith_vect * 180/pi, azi_avg[:, 1], "g")
+    plt.plot(RAD.zenith_vect * 180/pi, azi_avg[:, 2], "b")
 
     plt.show()

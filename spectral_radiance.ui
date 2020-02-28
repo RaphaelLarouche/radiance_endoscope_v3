@@ -289,7 +289,7 @@
                  <number>400</number>
                 </property>
                 <property name="singleStep">
-                 <number>10</number>
+                 <number>5</number>
                 </property>
                </widget>
               </item>
