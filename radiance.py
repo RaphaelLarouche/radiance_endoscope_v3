@@ -100,7 +100,13 @@ class Radiance(cameracontrol.ProcessImage):
 
         if len(self.image.shape) == 2:
 
-            im_nn = self.darksub(self.image.astype(float), "metadata")   # 1. Dark frame subtraction (USING METADATA FOR NOW)
+            path = glob.glob(self.savefolder + "/DARK_*")
+
+            if path:
+                im_nn = self.darksub(self.image.astype(float), "darkframe")   # 1. Dark frame subtraction (USING METADATA FOR NOW)
+            else:
+                im_nn = self.darksub(self.image.astype(float), "metadata")
+
             im_norm = self.exposure_normalization(self.gain_normalization(im_nn))   # 2. Exposure and gain normalization
             im_dws = self.dwnsampling(im_norm, "BGGR")  # 3. Downsampling
 
@@ -128,7 +134,8 @@ class Radiance(cameracontrol.ProcessImage):
         :return:
         """
         if method == "darkframe":
-            dark, metdark = self.readTIFF_xiMU(self.savefolder)
+            path = glob.glob(self.savefolder + "/DARK_*")
+            dark, metdark = self.readTIFF_xiMU(path[0])
             image -= dark
 
         elif method == "metadata":

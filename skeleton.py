@@ -260,10 +260,13 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 if isinstance(getattr(structure, i[0]), int) or isinstance(getattr(structure, i[0]), float):
                     met_dict[i[0]] = getattr(structure, i[0])
 
-            # Adding roll, yaw and pitch in degrees.
+            # Adding roll, yaw and pitch in degrees to metadata.
             met_dict["orientation roll"] = self.orientation[0]
             met_dict["orientation pitch"] = self.orientation[1]
             met_dict["orientation yaw"] = self.orientation[2]
+
+            # Adding depth in cm to metadata
+            met_dict["depth cm"] = self.ui.depth.value()
 
             # Medium
             met_dict["medium"] = self.medium.lower()
