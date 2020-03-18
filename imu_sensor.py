@@ -493,7 +493,7 @@ class MinIMUv5(MinIMU_v5_pi):
 if __name__ == "__main__":
     sens = MinIMUv5()
 
-    sens.magnetometer_calibration()  # calibration
+    #sens.magnetometer_calibration()  # calibration
 
     #sens.start_anim()
 

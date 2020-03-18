@@ -12,10 +12,8 @@ from gui_source_code import Ui_mainWindow
 import glob
 import datetime
 import cameracontrol
-import imu_sensor
 from ximea import xiapi
 import numpy as np
-import radiance
 import threadfile
 
 
@@ -26,8 +24,12 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.ui.setupUi(self)
 
         # Attributes initialized
-        self.savepath = False
-        self.foldername = "/" + self.ui.fname.text()
+        self.savepath = self.ui.saveFolder.text()
+        self.campaign = self.ui.CampName.text()
+        self.foldername = self.ui.fname.text()  # Name of the folder only
+
+        self.longpath = self.create_path()
+
         self.bin_choice = {"2x2": "XI_DWN_2x2", "4x4": "XI_DWN_4x4"}
         self.orientation = np.zeros(3)
 
@@ -36,9 +38,9 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.cam = xiapi.Camera()
 
         self.img = xiapi.Image()  # Create ximea Image instance
-        print("Opening camera")
-        self.cam.open_device_by("XI_OPEN_BY_SN", "16990159")
-        self.status = True
+        #print("Opening camera")
+        #self.cam.open_device_by("XI_OPEN_BY_SN", "16990159")
+        #self.status = True
 
         self.imformat = "XI_RAW16"
         self.bin = self.bin_choice[self.ui.binComboBox.currentText()]
@@ -51,8 +53,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.medium = self.ui.air.text()
 
         # Threads
-        self.euler_thread = threadfile.Euler()  # IMU
-        self.camera_thread = threadfile.CameraThread(self.imformat, self.bin, self.exp, self.gain, self.cam, self.medium)  # CAM
+        #self.euler_thread = threadfile.Euler()  # IMU
+        #self.camera_thread = threadfile.CameraThread(self.imformat, self.bin, self.exp, self.gain, self.cam, self.medium)  # CAM
 
         # Updating pyqtgraph graph appearance
         self.pred = self.pyqtplot(np.array([0]), np.array([0]), "611 nm", "r")
@@ -66,7 +68,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.ui.exposureSpinBox.setKeyboardTracking(False)
         self.ui.gainDoubleSpinBox.setKeyboardTracking(False)
 
-        # Connections ___________________________________________________________________
+        # Connections and signals ___________________________________________________________________
         self.ui.exposureSlider.valueChanged.connect(self.exposure_slider)
         self.ui.gainSlider.valueChanged.connect(self.gain_slider)
 
@@ -75,27 +77,30 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         self.ui.binComboBox.currentTextChanged.connect(self.bin_combobox)
 
-        self.ui.chooseFolderButton.clicked.connect(self.getdirectory)  # Choose folder button
-
         self.ui.darkFrameButton.clicked.connect(self.darkframe_button)  # Darkframe button
         self.ui.acquisitionButton.clicked.connect(self.acquisition_button)  # Acquisition button
 
         self.ui.live.toggled.connect(self.start_realtimedata)  # Toggle of real time data --> starting timer
 
-        self.ui.fname.editingFinished.connect(self.folder_name_changed)
+        #self.ui.fname.editingFinished.connect(self.folder_name_changed)
+
+        self.ui.chooseFolderButton.clicked.connect(self.getdirectory)  # Choose folder button
+        self.ui.newProfileButton.clicked.connect(self.new_profile_button)
+        self.ui.fname.textChanged.connect(self.folder_name_changed)
+        self.ui.CampName.editingFinished.connect(self.camp_name_changed)
 
         self.ui.air.toggled.connect(self.water_air_radiobutton)
         self.ui.water.toggled.connect(self.water_air_radiobutton)
 
         # Custom signals from thread
-        self.euler_thread.my_signal.connect(self.display_angle)
-        self.camera_thread.my_signal.connect(self.plot_avg)
-        self.camera_thread.my_signal_temperature.connect(self.ui.boardTemp.setText)
-        self.camera_thread.my_signal_saturation.connect(self.ui.errorlog.setText)
+        #self.euler_thread.my_signal.connect(self.display_angle)
+        #self.camera_thread.my_signal.connect(self.plot_avg)
+        #self.camera_thread.my_signal_temperature.connect(self.ui.boardTemp.setText)
+        #self.camera_thread.my_signal_saturation.connect(self.ui.errorlog.setText)
 
-        # Starting IMU Thread (Always running!)
-        self.euler_thread.running = True
-        self.euler_thread.start()
+        # Starting IMU Thread (Always running to be able to record and save the angles even when data is not live)
+        #self.euler_thread.running = True
+        #self.euler_thread.start()
 
     def start_realtimedata(self, b):
         """
@@ -112,13 +117,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.camera_thread.running = True
             self.camera_thread.start()
 
-            # IMU thread
-            #self.euler_thread.running = True
-            #self.euler_thread.start()
-
         else:
             self.camera_thread.running = False
-            #self.euler_thread.running = False
 
             # Stopping acquisition
             print("Stopping acquisition...")
@@ -193,37 +193,71 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         self.camera_thread.bin = self.bin_choice[self.ui.binComboBox.currentText()]
 
-    def getdirectory(self):
-        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Open files")
-        if folder:
-            if not [f for f in os.listdir(folder) if not f.startswith('.')]:
+    def create_path(self):
+        today = datetime.datetime.utcnow()
+        return "{0}/{1}_{2}/{3}".format(self.savepath, self.campaign, today.strftime("%Y%m%d"), self.foldername)
 
-                self.ui.saveFolder.setText(folder + self.foldername)
-                self.savepath = folder
-
-                self.folder_name_changed()
-
-            else:
-                self.ui.errorlog.setText("Directory not empty")
-
-    def folder_name_changed(self):
+    def create_directory(self):
         """
-        Get called when the user enter a new folder name.
+        Function to create a directory if it doesn't already exists.
+
         :return:
         """
 
-        dirname = self.savepath + "/" + self.ui.fname.text()
+        complete_path = self.create_path()
 
-        if not os.path.exists(dirname):
-            os.mkdir(dirname)
+        # Case if the directory already exists
+        if os.path.exists(complete_path):
 
-            self.foldername = "/" + self.ui.fname.text()
-            self.ui.saveFolder.setText(self.savepath + self.foldername)
+            self.ui.errorlog.setText("Directory already exists")
+            print("Directory ", complete_path, " already exists")
 
-            print("Directory ", dirname, " Created ")
+        # Case of creation of the directory
         else:
-            print("Directory ", dirname, " already exists")
-            self.ui.errorlog.setText("Directory " + dirname + " already exists")
+            os.makedirs(complete_path)
+            self.ui.errorlog.setText("Directory successfully created")
+            print("Directory ", complete_path, " Created ")
+
+        self.ui.saveFolder.setText(complete_path)
+        self.longpath = complete_path
+
+    def getdirectory(self):
+
+        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Open files")
+
+        if folder:
+            self.savepath = folder
+            self.create_directory()
+
+    def camp_name_changed(self):
+        self.campaign = self.ui.CampName.text()
+        self.create_directory()
+
+    def folder_name_changed(self):
+        self.foldername = self.ui.fname.text()
+        self.create_directory()
+
+    def new_profile_button(self):
+        """
+        Function called when new_profile pushbutton is pressed.
+
+        :return:
+        """
+        dirn = os.path.dirname(self.longpath)
+        filelist = os.listdir(dirn)
+        digit = []
+
+        for name in filelist:
+            diglist = [int(i) for i in name.split("_") if i.isdigit()]
+            digit += diglist
+
+        num = 1
+        while num in digit:
+            num+=1
+
+        newname = "profile_{0:03}".format(num)
+
+        self.ui.fname.setText(newname)
 
     def display_angle(self, xAngle, yAngle, zAngle):
         """
@@ -254,13 +288,14 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         """"
         Construction of xiMU metadata dictionary.
         """
+
         if isinstance(structure, xiapi.Image):
             met_dict = {}
             for i in structure._fields_:
                 if isinstance(getattr(structure, i[0]), int) or isinstance(getattr(structure, i[0]), float):
                     met_dict[i[0]] = getattr(structure, i[0])
 
-            # Adding roll, yaw and pitch in degrees to metadata.
+            # Adding roll, yaw and pitch in degrees to metadata
             met_dict["orientation roll"] = self.orientation[0]
             met_dict["orientation pitch"] = self.orientation[1]
             met_dict["orientation yaw"] = self.orientation[2]
@@ -268,7 +303,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             # Adding depth in cm to metadata
             met_dict["depth cm"] = self.ui.depth.value()
 
-            # Medium
+            # Adding medium to metadata
             met_dict["medium"] = self.medium.lower()
 
             return met_dict
@@ -322,7 +357,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 # Save
                 today = datetime.datetime.utcnow()
                 depth = self.ui.depth.value()
-                path = self.savepath + self.foldername + "/IMG_" + today.strftime("%Y%m%d_%H%M%S_UTC_") + str(depth) + "cm" + ".tif"
+                path = self.longpath + "/IMG_" + today.strftime("%Y%m%d_%H%M%S_UTC_") + str(depth) + "cm" + ".tif"
 
                 self.saveTIFF_xiMU(path, image, metadata)
 
@@ -349,7 +384,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 image, metadata = self.acquisition()
                 # Save
                 today = datetime.datetime.utcnow()
-                path = self.savepath + self.foldername + "/DARK_" + today.strftime("%Y%m%d_%H%M%S_UTC") + ".tif"  # year/month/day
+                path = self.longpath + "/DARK_" + today.strftime("%Y%m%d_%H%M%S_UTC") + ".tif"  # year/month/day
 
                 self.saveTIFF_xiMU(path, image, metadata)
 
@@ -395,13 +430,12 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         :param event:
         :return:
         """
-
-        print("Closing device")
         if self.status:
+            print("Closing device")
             self.cam.close_device()
 
-        self.euler_thread.exit()
-        self.camera_thread.exit()
+        #self.euler_thread.exit()
+        #self.camera_thread.exit()
         event.accept()
 
 
