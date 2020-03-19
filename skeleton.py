@@ -15,6 +15,7 @@ import cameracontrol
 from ximea import xiapi
 import numpy as np
 import threadfile
+import time
 
 
 class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
@@ -38,9 +39,9 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.cam = xiapi.Camera()
 
         self.img = xiapi.Image()  # Create ximea Image instance
-        #print("Opening camera")
-        #self.cam.open_device_by("XI_OPEN_BY_SN", "16990159")
-        #self.status = True
+        print("Opening camera")
+        self.cam.open_device_by("XI_OPEN_BY_SN", "16990159")
+        self.status = True
 
         self.imformat = "XI_RAW16"
         self.bin = self.bin_choice[self.ui.binComboBox.currentText()]
@@ -53,16 +54,18 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.medium = self.ui.air.text()
 
         # Threads
-        #self.euler_thread = threadfile.Euler()  # IMU
-        #self.camera_thread = threadfile.CameraThread(self.imformat, self.bin, self.exp, self.gain, self.cam, self.medium)  # CAM
+        self.euler_thread = threadfile.Euler()  # IMU
+        self.camera_thread = threadfile.CameraThread(self.imformat, self.bin, self.exp, self.gain, self.cam, self.medium)  # CAM
 
         # Updating pyqtgraph graph appearance
-        self.pred = self.pyqtplot(np.array([0]), np.array([0]), "611 nm", "r")
-        self.pgreen = self.pyqtplot(np.array([0]), np.array([0]), "530 nm", "g")
-        self.pblue = self.pyqtplot(np.array([0]), np.array([0]), "468 nm", "b")
+        self.pyqtLegend()
 
-        self.ui.visualisationWindow.setLabel("left", "D.N normalized", size=2, color="red")
-        self.ui.visualisationWindow.setLabel("bottom", "Zenith angle [˚]", size=2, color="red")
+        self.pred = self.pyqtplot(np.array([0]), np.array([0]), "607 nm", "r")
+        self.pgreen = self.pyqtplot(np.array([0]), np.array([0]), "528 nm", "g")
+        self.pblue = self.pyqtplot(np.array([0]), np.array([0]), "466 nm", "b")
+
+        self.ui.visualisationWindow.plotItem.setLabel("left", "D.N normalized")
+        self.ui.visualisationWindow.plotItem.setLabel("bottom", "Zenith angle [˚]")
 
         # Spinbox with keyboard tracking disable
         self.ui.exposureSpinBox.setKeyboardTracking(False)
@@ -82,8 +85,6 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         self.ui.live.toggled.connect(self.start_realtimedata)  # Toggle of real time data --> starting timer
 
-        #self.ui.fname.editingFinished.connect(self.folder_name_changed)
-
         self.ui.chooseFolderButton.clicked.connect(self.getdirectory)  # Choose folder button
         self.ui.newProfileButton.clicked.connect(self.new_profile_button)
         self.ui.fname.textChanged.connect(self.folder_name_changed)
@@ -93,14 +94,14 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.ui.water.toggled.connect(self.water_air_radiobutton)
 
         # Custom signals from thread
-        #self.euler_thread.my_signal.connect(self.display_angle)
-        #self.camera_thread.my_signal.connect(self.plot_avg)
-        #self.camera_thread.my_signal_temperature.connect(self.ui.boardTemp.setText)
-        #self.camera_thread.my_signal_saturation.connect(self.ui.errorlog.setText)
+        self.euler_thread.my_signal.connect(self.display_angle)
+        self.camera_thread.my_signal.connect(self.plot_avg)
+        self.camera_thread.my_signal_temperature.connect(self.ui.boardTemp.setText)
+        self.camera_thread.my_signal_saturation.connect(self.ui.saturation.setText)
 
         # Starting IMU Thread (Always running to be able to record and save the angles even when data is not live)
-        #self.euler_thread.running = True
-        #self.euler_thread.start()
+        self.euler_thread.running = True
+        self.euler_thread.start()
 
     def start_realtimedata(self, b):
         """
@@ -206,14 +207,12 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         complete_path = self.create_path()
 
-        # Case if the directory already exists
-        if os.path.exists(complete_path):
+        if os.path.exists(complete_path):  # Case if the directory already exists
 
             self.ui.errorlog.setText("Directory already exists")
             print("Directory ", complete_path, " already exists")
 
-        # Case of creation of the directory
-        else:
+        else:  # Case if it's a new directory
             os.makedirs(complete_path)
             self.ui.errorlog.setText("Directory successfully created")
             print("Directory ", complete_path, " Created ")
@@ -222,6 +221,13 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.longpath = complete_path
 
     def getdirectory(self):
+        """
+        Function called when the Choose directory button is pressed. It opens a window to select the most general
+        directory where the Campaign name and the current date will be used to create a subfolder. It saves the path to
+        a class attribute named self.savepath.
+
+        :return:
+        """
 
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Open files")
 
@@ -230,32 +236,49 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.create_directory()
 
     def camp_name_changed(self):
+        """
+        Function called whenever the user change the name of the campaign. It saves the new name to the class attribute
+        self.campaign.
+        :return:
+        """
         self.campaign = self.ui.CampName.text()
         self.create_directory()
 
     def folder_name_changed(self):
+        """
+        Function called each time the QLineEdith fname (folder name) gets changed. Save the new folder name in a Class
+        attribute name self.foldername which is used to create the complete path where images are saved.
+        :return:
+        """
         self.foldername = self.ui.fname.text()
         self.create_directory()
 
     def new_profile_button(self):
         """
-        Function called when new_profile pushbutton is pressed.
+        Called when new_profile pushbutton is pressed. Create a new name according to the different names found in the
+        campaign directory.
 
         :return:
         """
         dirn = os.path.dirname(self.longpath)
         filelist = os.listdir(dirn)
         digit = []
+        fname = []
 
         for name in filelist:
             diglist = [int(i) for i in name.split("_") if i.isdigit()]
+            fname += [i for i in name.split("_") if not i.isdigit()]
             digit += diglist
 
         num = 1
         while num in digit:
-            num+=1
+            num += 1
 
-        newname = "profile_{0:03}".format(num)
+        if all(x == fname[0] for x in fname):
+            newname = fname[0] + "_{0:03}".format(num)
+            print("All elements are the same")
+        else:
+            newname = "profile_{0:03}".format(num)
 
         self.ui.fname.setText(newname)
 
@@ -277,6 +300,11 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.camera_thread.orientation[0], self.camera_thread.orientation[1], self.camera_thread.orientation[2] = xAngle, yAngle, zAngle
 
     def update_camera(self):
+        """
+        Gets called before each acquisition (called by Dark frame button and Acquisition button) to make sure each
+        parameters (gain, exposure time, bin, medium, image format) are set correctly according to user inputs.
+        :return:
+        """
 
         self.cam.set_imgdataformat(self.imformat)  # Image format
         self.cam.set_downsampling_type("XI_BINNING")
@@ -344,16 +372,19 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         :return:
         """
-        if self.savepath:
-            darkim = glob.glob(self.savepath + self.foldername + "/DARK_*.tif")
+        if self.longpath:
+            darkim = glob.glob(self.longpath + "/DARK_*.tif")
 
             if darkim:
+                self.ui.errorlog.setText("Busy")
+
                 # Stop real time data
                 cond = self.ui.live.isChecked()
-                self.ui.live.setChecked(False)
+                self.ui.live.setChecked(False)  # Stopping realtime data
 
                 # Acquisition
                 image, metadata = self.acquisition()
+
                 # Save
                 today = datetime.datetime.utcnow()
                 depth = self.ui.depth.value()
@@ -362,7 +393,10 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 self.saveTIFF_xiMU(path, image, metadata)
 
                 if cond:
-                    self.ui.live.setChecked(True)
+                    self.ui.live.setChecked(True)  # Restarting realtime data
+
+                self.ui.errorlog.setText("Ready for acquisition")
+
             else:
                 self.ui.errorlog.setText("Dark frame does not appear to be acquire.")
         else:
@@ -373,10 +407,12 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
         :return:
         """
-        if self.savepath:
-            darkim = glob.glob(self.savepath + self.foldername + "/DARK_*.tif")
+        if self.longpath:
+            darkim = glob.glob(self.longpath + "/DARK_*.tif")
 
             if not darkim:
+                self.ui.errorlog.setText("Busy")
+
                 cond2 = self.ui.live.isChecked()
                 self.ui.live.setChecked(False)
 
@@ -390,6 +426,9 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
 
                 if cond2:
                     self.ui.live.setChecked(True)
+
+                self.ui.errorlog.setText("Ready for acquisition")
+
             else:
                 self.ui.errorlog.setText("Dark frame already exists.")
         else:
@@ -409,20 +448,28 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.pgreen.setData(angle, rad_green)
         self.pblue.setData(angle, rad_blue)
 
-        #self.ui.visualisationWindow.clear()
-
-        #self.pyqtplot(angle, rad_red, "611 nm", "r")
-        #self.pyqtplot(angle, rad_green, "530 nm", "g")
-        #self.pyqtplot(angle, rad_blue, "468 nm", "b")
-
-        #self.ui.visualisationWindow.setLabel("left", "D.N normalized", size="6pt")
-        #self.ui.visualisationWindow.setLabel("bottom", "Zenith angle [˚]", size="6pt")
-
-        #self.ui.visualisationWindow.addLegend(offset=(10, 5))
-
     def pyqtplot(self, x, y, plotname, color):
         pen = pyqtgraph.mkPen(color=color)
         return self.ui.visualisationWindow.plot(x, y, name=plotname, pen=pen)
+
+    def pyqtLegend(self):
+        """
+        Function to create the legend for the visualization window.
+        :return:
+        """
+        col = ["r", "g", "b"]
+        label = ["607 nm", "528 nm", "466 nm"]
+        l = pyqtgraph.LegendItem()
+        l.setParentItem(self.ui.visualisationWindow.plotItem)
+        l.anchor((1, 0), (1, 0), offset=(-5, 5))  # Offsets in pixels, (1 means right 0 left, 0 top 1 bottom)
+
+        for i, val in enumerate(zip(col, label)):
+            c, nm = val
+            pen = pyqtgraph.mkPen(color=c)
+            p = self.ui.visualisationWindow.plot(np.array([0]), np.array([0]), pen=pen)
+            l.addItem(p, nm)
+            sample, label = l.items[-1]
+            label.setText(label.text, size="7pt")
 
     def closeEvent(self, event):  # Should also do a functino for signal KILL code 137.....?
         """
@@ -434,8 +481,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             print("Closing device")
             self.cam.close_device()
 
-        #self.euler_thread.exit()
-        #self.camera_thread.exit()
+        self.euler_thread.exit()
+        self.camera_thread.exit()
         event.accept()
 
 
