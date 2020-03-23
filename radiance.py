@@ -16,6 +16,7 @@ import glob
 from math import pi
 import quadpy
 from scipy.interpolate import griddata
+from scipy.spatial import cKDTree
 import time
 
 # Importation of other modules
@@ -135,14 +136,17 @@ class Radiance(cameracontrol.ProcessImage):
         """
         if method == "darkframe":
             path = glob.glob(self.savefolder + "/DARK_*")
-            dark, metdark = self.readTIFF_xiMU(path[0])
-            image -= dark
+            dark, metdark = self.readTIFF_xiMU(path[0])  # To be changed because of new method...
+
+            image = image.astype(float)
+            image -= dark.astype(float)
 
         elif method == "metadata":
-            image -= self.metadata["black_level"]
+            image = image.astype(float)
+            image -= float(self.metadata["black_level"])
 
         else:
-            raise ValueError("Invalid method argument. Expect darkframe or metadata.")
+            raise ValueError("Invalid method argument. Expect dark frame or metadata.")
 
         return image
 
@@ -198,6 +202,200 @@ class Radiance(cameracontrol.ProcessImage):
 
         return new_im
 
+    def radiancemap_rotation(self, medium, orientation, angular_res=1.0):
+        """
+
+
+        :param medium:
+        :param orientation:
+        :param angular_res:
+        :return:
+        """
+
+        # Finding coordinates in X, Y and Z of each pixel of the camera
+        imsize = self.geometric_calibration["imagesize"]
+        distcenter = self.geometric_calibration["centerpoint"]
+        fitcoefficients = self.geometric_calibration["fitparams"]
+
+        camtheta, camphi = self.angularcoordinates_forcedzero(imsize, distcenter, fitcoefficients)
+
+        mask = camtheta > 90
+        camtheta[mask] = np.nan
+        camphi[mask] = np.nan
+        camtheta *= pi/180
+        camphi *= pi/180
+
+        py, pz, px = self.points_3d(camtheta, camphi)  # x is in direction of optical axis
+
+        # Application of the rotation according to IMU data
+
+        # According to our coordinate system with z pointing upward, the X axis and Y axis of the IMU are interchanged.
+        # For this reason, the roll which is now about the Y axis has to change in sign.
+
+        orientation = orientation.astype(float)
+        orientation *= pi/180
+        roll, pitch, yaw = orientation[0], orientation[1], orientation[2]
+        roll = -roll
+
+       # matrix_rotation = np.dot(np.dot(self.rz(yaw), self.ry(roll)), self.rx(pitch))  # Inversion of pitch and roll
+        matrix_rotation = np.dot(self.ry(roll), self.rx(pitch))
+        npx, npy, npz = self.rotation(px, py, pz, matrix_rotation)
+
+        # Find maximum and minimum in zenith and azimuth angles (according to Z pointing upward).
+        azimuth = np.arctan2(npy, npx)
+        maskneg = azimuth < 0.0
+        azimuth[maskneg] = azimuth[maskneg] + 2*pi
+        zenith = np.arccos(npz)
+
+        limits_zen = (np.nanmin(zenith), np.nanmax(zenith))
+        limits_az = (0.5 * pi/180, 179.5 * pi/180)
+
+        # 1. Building zenith and azimuth array and meshgrid
+        nb_zen = np.round(abs(limits_zen[1] - limits_zen[0]) / (angular_res * pi / 180)) + 1
+        nb_azi = np.round(abs(limits_az[1] - limits_az[0]) / (angular_res * pi / 180)) + 1
+
+        zenith_vector = np.linspace(limits_zen[0], limits_zen[1], nb_zen.astype(int))  # rads
+        azimuth_vector = np.linspace(limits_az[0], limits_az[1], nb_azi.astype(int))  # rads
+
+        azi, zeni = np.meshgrid(azimuth_vector, zenith_vector)  # Meshgrid
+
+        pxreg, pyreg, pzreg = self.points_3d(zeni, azi)
+
+
+        # fig1 = plt.figure()
+        # ax1 = fig1.add_subplot(111, projection="3d")
+        #
+        # ax1.scatter(npx[::10, ::10], npy[::10, ::10], npz[::10, ::10])
+        # ax1.scatter(pxreg, pyreg, pzreg)
+        # ax1.set_xlabel("Xaxis")
+        # ax1.set_ylabel("Yaxis")
+        # ax1.set_zlabel("Zaxis")
+        #
+        #
+        # fig2 = plt.figure()
+        # ax2 = fig2.add_subplot(121)
+        # ax3 = fig2.add_subplot(122)
+        #
+        # ax3.imshow(azimuth)
+        # ax2.imshow(zenith)
+        #
+        # plt.show()
+
+    def radiancemap_interpolation(self, medium, orientation, angular_res=1.0):
+
+        if len(self.imradiance.shape) == 3:
+
+            # Finding coordinates in X, Y and Z of each pixel of the camera
+            imsize = self.geometric_calibration["imagesize"]
+            distcenter = self.geometric_calibration["centerpoint"]
+            fitcoefficients = self.geometric_calibration["fitparams"]
+
+            camtheta, camphi = self.angularcoordinates_forcedzero(imsize, distcenter, fitcoefficients)
+
+            mask = camtheta > 90
+            camtheta[mask] = np.nan
+            camphi[mask] = np.nan
+            camtheta *= pi / 180
+            camphi *= pi / 180
+
+            py, pz, px = self.points_3d(camtheta, camphi)  # x is in direction of optical axis
+
+            # Application of the rotation according to IMU data
+
+            # According to our coordinate system with z pointing upward, the X axis and Y axis of the IMU are interchanged.
+            # For this reason, the roll which is now about the Y axis has to change in sign.
+
+            orientation = orientation.astype(float)
+            orientation *= pi / 180
+            roll, pitch, yaw = orientation[0], orientation[1], orientation[2]
+            roll = -roll
+
+            # matrix_rotation = np.dot(np.dot(self.rz(yaw), self.ry(roll)), self.rx(pitch))  # Inversion of pitch and roll
+            matrix_rotation = np.dot(self.ry(roll), self.rx(pitch))
+            npx, npy, npz = self.rotation(px, py, pz, matrix_rotation)
+
+            # Regular grid 4 pi steradian
+            limits_zen = np.array([0.5, 179.5]) * pi / 180
+            limits_az = np.array([0.5, 359.5]) * pi / 180
+
+            nb_zen = np.round(abs(limits_zen[1] - limits_zen[0]) / (angular_res * pi / 180)) + 1
+            nb_azi = np.round(abs(limits_az[1] - limits_az[0]) / (angular_res * pi / 180)) + 1
+
+            zenith_vector = np.linspace(limits_zen[0], limits_zen[1], nb_zen.astype(int))  # rads
+            azimuth_vector = np.linspace(limits_az[0], limits_az[1], nb_azi.astype(int))  # rads
+
+            azi, zeni = np.meshgrid(azimuth_vector, zenith_vector)  # Meshgrid
+
+            pxreg, pyreg, pzreg = self.points_3d(zeni, azi)  # Wanted points
+
+            # Reference points of the camera (demosaic eventually)
+            cond = ~np.isnan(npx)
+            points = np.c_[npx[cond], npy[cond], npz[cond]]
+
+            grid_points = np.c_[pxreg.ravel(), pyreg.ravel(), pzreg.ravel()]
+
+            tim1 = time.time()
+            tree = cKDTree(points[::10])
+            distances, _ = tree.query(grid_points)
+            distances = distances.reshape(pxreg.shape)
+            tim2 = time.time()
+
+            print(tim2 - tim1)
+
+            #interp = griddata(points, val[cond], (pxreg, pyreg, pzreg), method="nearest")
+            #interp = interp.reshape(pxreg.shape).astype(float)
+
+            toofar = distances > 0.08
+            #interp[toofar] *= np.nan
+            pxreg[toofar] *= np.nan
+            pyreg[toofar] *= np.nan
+            pzreg[toofar] *= np.nan
+
+            # Dewarping instead of interpolation
+            # 3. Application of rotation matrix
+            rotation_mat = np.dot(self.ry(-roll), self.rx(-pitch))  # 180 around z and 90 around x
+            nnpx, nnpy, nnpz = self.rotation(pxreg, pyreg, pzreg, rotation_mat)
+
+            theta = np.arccos(nnpx)
+            phi = np.arctan2(nnpz, nnpy)
+
+            # 4. Dewarping
+            dewarped = np.zeros((theta.shape[0], theta.shape[1], 3))
+
+            for i in range(len(dewarped.shape)):
+                dewarped[:, :, i] = self.dewarp(self.imradiance[:, :, i], theta, phi)
+
+            # 5. Storing new radiance map image
+            self.radiance_map = dewarped
+            self.zenith_vect = zenith_vector
+            self.azimuth_vect = azimuth_vector
+
+            # Viz
+            fig1 = plt.figure()
+            ax1 = fig1.add_subplot(111, projection="3d")
+
+            #ax1.scatter(npx[::10, ::10], npy[::10, ::10], npz[::10, ::10])
+            ax1.scatter(pxreg[::10, ::10], pyreg[::10, ::10], pzreg[::10, ::10])
+            ax1.scatter(nnpx[::10, ::10], nnpy[::10, ::10], nnpz[::10, ::10])
+            ax1.set_xlabel("Xaxis")
+            ax1.set_ylabel("Yaxis")
+            ax1.set_zlabel("Zaxis")
+            #
+            fig2 = plt.figure()
+            ax2 = fig2.add_subplot(121)
+            ax3 = fig2.add_subplot(122)
+
+            ax2.imshow(distances)
+            ax3.imshow(dewarped[:, :, 0])
+
+            plt.show()
+
+            return dewarped
+
+        else:
+            raise ValueError("Demosaic should be done before building radiance mapping.")
+
+
     def makeradiancemap_am(self, medium, orientation, angular_res=1.0):
         """
         New version of radiance mapping. It now uses information about the medium to set the camera limits in zenith
@@ -218,7 +416,7 @@ class Radiance(cameracontrol.ProcessImage):
             yaw = orientation[2] * degradconst
 
             if medium.lower() == "air":
-                cam_zen_limits = np.array([0.5, 179.5]) * degradconst  # Prevent division by 0 ??
+                cam_zen_limits = np.array([0.5, 179.5]) * degradconst  # Preve?nt division by 0 ?
                 #cam_az_limits = np.array([-89.5, 89.5]) * degradconst
                 cam_az_limits = np.array([0.5, 179.5]) * degradconst
 
@@ -244,10 +442,10 @@ class Radiance(cameracontrol.ProcessImage):
             phi = np.arctan2(pz, px)
 
             # Dewarping
-            # dewarped = np.zeros((theta.shape[0], theta.shape[1], 3))
-            #
-            # for i in range(len(dewarped.shape)):
-            #     dewarped[:, :, i] = self.dewarp(self.imradiance[:, :, i], theta, phi)
+            dewarped = np.zeros((theta.shape[0], theta.shape[1], 3))
+
+            for i in range(len(dewarped.shape)):
+                dewarped[:, :, i] = self.dewarp(self.imradiance[:, :, i], theta, phi)
 
             # Rotation of coordinates according to IMU data
             matrix_rotation = np.dot(np.dot(self.rz(yaw), self.ry(pitch)), self.rx(roll))
@@ -287,16 +485,16 @@ class Radiance(cameracontrol.ProcessImage):
         else:
             raise ValueError("Demosaic should be done before building radiance mapping.")
 
-    def makeradiancemap(self, zeni_lims, azi_lims, angular_res=1.0):
-       """
-       
-       :param im: 
-       :param zeni_lims: 
-       :param azi_lims: 
-       :param angular_res: 
-       :return: 
-       """""
-       if len(self.imradiance.shape) == 3:
+    def makeradiancemap(self, zeni_lims, azi_lims, orientation, angular_res=1.0):
+        """
+
+        :param im: 
+        :param zeni_lims: 
+        :param azi_lims: 
+        :param angular_res: 
+        :return: 
+        """""
+        if len(self.imradiance.shape) == 3:
 
             # 1. Building zenith and azimuth array and meshgrid
             nb_zen = np.round(abs(zeni_lims[1] * pi/180 - zeni_lims[0] * pi/180)/(angular_res * pi/180)) + 1
@@ -328,10 +526,10 @@ class Radiance(cameracontrol.ProcessImage):
             self.zenith_vect = zenith_vector
             self.azimuth_vect = azimuth_vector
 
-       else:
-            raise ValueError("Demosaic should be done before building the radiance 2d map.")
+            return dewarped
 
-       return dewarped
+        else:
+            raise ValueError("Demosaic should be done before building the radiance 2d map.")
 
     def dewarp(self, image, theta, phi):
         """
@@ -496,7 +694,7 @@ class Radiance(cameracontrol.ProcessImage):
             interp = griddata(points, val[cond], (newcoord[:, 0], newcoord[:, 1], newcoord[:, 2]), method="nearest")
 
         else:
-            raise ValueError("N.")
+            raise ValueError("Arrays don't seams to have the same size.")
 
         return interp
 
@@ -606,10 +804,13 @@ if __name__ == "__main__":
     PI = cameracontrol.ProcessImage()
 
     #path_im_test = "/Users/raphaellarouche/Desktop/IMG_20200117_194959_UTC.tif"
-    path_im_test = "/Users/raphaellarouche/Desktop/IMG_20200218_225010_UTC_testdewarp2.tif"
+    #path_im_test = "/Users/raphaellarouche/Desktop/IMG_20200218_225010_UTC_testdewarp2.tif"
+    path_im_test = "/home/pi/Desktop/test18mars/ParcBic_20200319/profile_001/IMG_20200319_173420_UTC_0cm.tif"
     impathstr = glob.glob(path_im_test)
 
-    image, metadata = PI.readTIFF_xiMU(impathstr[0])
+    image, metadata = PI.readTiff_xiMU_multiple_exposure(impathstr[0])
+    print(image.shape)
+    print(metadata.keys())
 
     # Instance of RadianceClass
     #a = Radiance(image, metadata, "air", "test")
@@ -622,17 +823,31 @@ if __name__ == "__main__":
     #print(a.lebedev_integration_test([90, 180], [0, 360], 125, viz=True))
 
     # Example normal processing
-    t0 = time.time()
-    RAD = Radiance(image, metadata, "air", "ok")
-    imRAD = RAD.absolute_radiance()
-    imRADmap = RAD.makeradiancemap([0, 180], [0, 180], angular_res=0.25)
-
-    imRADmap2 = RAD.makeradiancemap_am("air", np.array([45, 0, 0]), angular_res=5)
-
-    azi_avg = RAD.azimuthal_integration()
-    tf = time.time()
-    dt = tf - t0
+    # t0 = time.time()
+    # RAD = Radiance(image, metadata, "air", "ok")
+    # imRAD = RAD.absolute_radiance()
+    # imRADmap = RAD.makeradiancemap([0, 180], [0, 180], angular_res=0.25)
+    #
+    # imRADmap2 = RAD.makeradiancemap_am("air", np.array([45, 0, 0]), angular_res=5)
+    #
+    # azi_avg = RAD.azimuthal_integration()
+    # tf = time.time()
+    # dt = tf - t0
     #print(dt)
+
+    RAD = Radiance(image[0, :, :], metadata["Image001"], "air", "ok")
+    #RAD.radiancemap_rotation("air", np.array([0, 0, 0]), angular_res=10)
+    #RAD.radiancemap_rotation("air", np.array([0, 0, 180]), angular_res=10)
+
+    RAD.absolute_radiance()
+    timestart = time.time()
+    RAD.radiancemap_interpolation("air", np.array([45, 0, 0]), angular_res=1)
+    #RAD.makeradiancemap([0.5, 179.5], [0.5, 179.5], np.array([45, 0, 0]), angular_res=0.5)
+    timeend = time.time()
+
+    print(timeend - timestart)
+
+    #plt.show()
 
     # Test limits of field of view
     # theta_pi1 = np.array([0, 0])
@@ -648,12 +863,12 @@ if __name__ == "__main__":
     #     print(theta)
     #     print(phi)
 
-    plt.figure()
-    plt.imshow(imRADmap[:, :, 0])
+    # plt.figure()
+    # plt.imshow(imRADmap[:, :, 0])
+    #
+    # plt.figure()
+    # plt.plot(RAD.zenith_vect * 180/pi, azi_avg[:, 0], "r")
+    # plt.plot(RAD.zenith_vect * 180/pi, azi_avg[:, 1], "g")
+    # plt.plot(RAD.zenith_vect * 180/pi, azi_avg[:, 2], "b")
 
-    plt.figure()
-    plt.plot(RAD.zenith_vect * 180/pi, azi_avg[:, 0], "r")
-    plt.plot(RAD.zenith_vect * 180/pi, azi_avg[:, 1], "g")
-    plt.plot(RAD.zenith_vect * 180/pi, azi_avg[:, 2], "b")
-
-    plt.show()
+    # plt.show()
