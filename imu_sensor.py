@@ -19,10 +19,6 @@ import _thread as thread
 from MinIMU_v5_pi import MinIMU_v5_pi
 
 
-# Adding filter,
-# Adding a function to save the calibration results
-# self.b and self.A imported from saved folder
-
 class MinIMUv5(MinIMU_v5_pi):
     """
     Class which upgrade and correct errors in the already existing MinIMU_v5_pi.
@@ -308,7 +304,7 @@ class MinIMUv5(MinIMU_v5_pi):
 
         :return:
         """
-
+        # IMU sensors read
         [Ax, Ay, Az] = self.readAccelerometer()
         [Gx, Gy, Gz] = self.readGyro()
         [Mx, My, Mz] = self.magnetometer_correction(self.readMagnetometer())  # Magnetometer readings corrected
@@ -319,7 +315,7 @@ class MinIMUv5(MinIMU_v5_pi):
 
         dt = time.time() - self.timekalman
 
-        # Transform gyro in rad/s
+        # Transform gyro from dps (degrees per second) to rad/s
         Gx *= np.pi/180
         Gy *= np.pi/180
         Gz *= np.pi/180
@@ -445,7 +441,7 @@ class MinIMUv5(MinIMU_v5_pi):
 
     def magnetometer_correction(self, mag):
         """
-        Magnetometer correction.
+        Application of magnetometer correction on data.
 
         :param mag:
         :return:
@@ -456,17 +452,35 @@ class MinIMUv5(MinIMU_v5_pi):
         return [mc[:, 0], mc[:, 1], mc[:, 1]]
 
     def trackAngleCalib(self):
+        """
+        Starting a new thread using method trackAngleThreadCalib.
+        :return:
+        """
         thread.start_new_thread(self.trackAngleThreadCalib, ())
 
     def trackAngleThreadCalib(self):
+        """
+        Thread using updateAngleCalib which is essentially the same function as the one provided in the super
+        class MinIMU_v5_pi.
+        :return:
+        """
         while True:
             self.updateAngleCalib()
             time.sleep(0.004)
 
     def trackAngleKalman(self):
+        """
+        Starting a new thread define in method track_angle_thread_kalman.
+        :return:
+        """
         thread.start_new_thread(self.track_angle_thread_kalman, ())
 
     def track_angle_thread_kalman(self):
+        """
+        Thread using kalman_filter method which is an amelioration of the original IMU code because it uses a Kalman
+        Filter.
+        :return:
+        """
         while True:
             self.kalman_filter(disp=True)
             time.sleep(0.004)
