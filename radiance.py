@@ -17,6 +17,7 @@ from math import pi
 import quadpy
 from scipy.interpolate import griddata
 from scipy.spatial import cKDTree
+import scipy.integrate as integrate
 import time
 
 # Importation of other modules
@@ -202,111 +203,32 @@ class Radiance(cameracontrol.ProcessImage):
 
         return new_im
 
-    def radiancemap_rotation(self, medium, orientation, angular_res=1.0):
-        """
-
-
-        :param medium:
-        :param orientation:
-        :param angular_res:
-        :return:
-        """
-
-        # Finding coordinates in X, Y and Z of each pixel of the camera
-        imsize = self.geometric_calibration["imagesize"]
-        distcenter = self.geometric_calibration["centerpoint"]
-        fitcoefficients = self.geometric_calibration["fitparams"]
-
-        camtheta, camphi = self.angularcoordinates_forcedzero(imsize, distcenter, fitcoefficients)
-
-        mask = camtheta > 90
-        camtheta[mask] = np.nan
-        camphi[mask] = np.nan
-        camtheta *= pi/180
-        camphi *= pi/180
-
-        py, pz, px = self.points_3d(camtheta, camphi)  # x is in direction of optical axis
-
-        # Application of the rotation according to IMU data
-
-        # According to our coordinate system with z pointing upward, the X axis and Y axis of the IMU are interchanged.
-        # For this reason, the roll which is now about the Y axis has to change in sign.
-
-        orientation = orientation.astype(float)
-        orientation *= pi/180
-        roll, pitch, yaw = orientation[0], orientation[1], orientation[2]
-        roll = -roll
-
-       # matrix_rotation = np.dot(np.dot(self.rz(yaw), self.ry(roll)), self.rx(pitch))  # Inversion of pitch and roll
-        matrix_rotation = np.dot(self.ry(roll), self.rx(pitch))
-        npx, npy, npz = self.rotation(px, py, pz, matrix_rotation)
-
-        # Find maximum and minimum in zenith and azimuth angles (according to Z pointing upward).
-        azimuth = np.arctan2(npy, npx)
-        maskneg = azimuth < 0.0
-        azimuth[maskneg] = azimuth[maskneg] + 2*pi
-        zenith = np.arccos(npz)
-
-        limits_zen = (np.nanmin(zenith), np.nanmax(zenith))
-        limits_az = (0.5 * pi/180, 179.5 * pi/180)
-
-        # 1. Building zenith and azimuth array and meshgrid
-        nb_zen = np.round(abs(limits_zen[1] - limits_zen[0]) / (angular_res * pi / 180)) + 1
-        nb_azi = np.round(abs(limits_az[1] - limits_az[0]) / (angular_res * pi / 180)) + 1
-
-        zenith_vector = np.linspace(limits_zen[0], limits_zen[1], nb_zen.astype(int))  # rads
-        azimuth_vector = np.linspace(limits_az[0], limits_az[1], nb_azi.astype(int))  # rads
-
-        azi, zeni = np.meshgrid(azimuth_vector, zenith_vector)  # Meshgrid
-
-        pxreg, pyreg, pzreg = self.points_3d(zeni, azi)
-
-
-        # fig1 = plt.figure()
-        # ax1 = fig1.add_subplot(111, projection="3d")
-        #
-        # ax1.scatter(npx[::10, ::10], npy[::10, ::10], npz[::10, ::10])
-        # ax1.scatter(pxreg, pyreg, pzreg)
-        # ax1.set_xlabel("Xaxis")
-        # ax1.set_ylabel("Yaxis")
-        # ax1.set_zlabel("Zaxis")
-        #
-        #
-        # fig2 = plt.figure()
-        # ax2 = fig2.add_subplot(121)
-        # ax3 = fig2.add_subplot(122)
-        #
-        # ax3.imshow(azimuth)
-        # ax2.imshow(zenith)
-        #
-        # plt.show()
-
-    def radiancemap_interpolation(self, medium, orientation, angular_res=1.0):
+    def radiancemap_interpolation(self, orientation, angular_res=1.0):
 
         if len(self.imradiance.shape) == 3:
 
             # Finding coordinates in X, Y and Z of each pixel of the camera
-            imsize = self.geometric_calibration["imagesize"]
-            distcenter = self.geometric_calibration["centerpoint"]
-            fitcoefficients = self.geometric_calibration["fitparams"]
+            camtheta, camphi = self.zenith, self.azimuth
 
-            camtheta, camphi = self.angularcoordinates_forcedzero(imsize, distcenter, fitcoefficients)
+            if self.medium.lower() == "air":
+                masktheta = camtheta > 90
+            elif self.medium.lower() == "water":
+                masktheta = camtheta > 80
+            else:
+                raise ValueError("Invalid argument medium.")
 
-            mask = camtheta > 90
-            camtheta[mask] = np.nan
-            camphi[mask] = np.nan
+            camtheta[masktheta] = np.nan
+            camphi[masktheta] = np.nan
             camtheta *= pi / 180
             camphi *= pi / 180
 
             py, pz, px = self.points_3d(camtheta, camphi)  # x is in direction of optical axis
 
             # Application of the rotation according to IMU data
-
             # According to our coordinate system with z pointing upward, the X axis and Y axis of the IMU are interchanged.
             # For this reason, the roll which is now about the Y axis has to change in sign.
 
-            orientation = orientation.astype(float)
-            orientation *= pi / 180
+            orientation = orientation.astype(float) * pi / 180
             roll, pitch, yaw = orientation[0], orientation[1], orientation[2]
             roll = -roll
 
@@ -314,7 +236,10 @@ class Radiance(cameracontrol.ProcessImage):
             matrix_rotation = np.dot(self.ry(roll), self.rx(pitch))
             npx, npy, npz = self.rotation(px, py, pz, matrix_rotation)
 
-            # Regular grid 4 pi steradian
+            cond = ~np.isnan(npx)
+            ref_points = np.c_[npx[cond], npy[cond], npz[cond]]  # reference points of camera
+
+            # Building Regular grid over 4 pi steradian
             limits_zen = np.array([0.5, 179.5]) * pi / 180
             limits_az = np.array([0.5, 359.5]) * pi / 180
 
@@ -328,31 +253,26 @@ class Radiance(cameracontrol.ProcessImage):
 
             pxreg, pyreg, pzreg = self.points_3d(zeni, azi)  # Wanted points
 
-            # Reference points of the camera (demosaic eventually)
-            cond = ~np.isnan(npx)
-            points = np.c_[npx[cond], npy[cond], npz[cond]]
-
             grid_points = np.c_[pxreg.ravel(), pyreg.ravel(), pzreg.ravel()]
 
+            # Building a cKDTree to have distance between each regular gridded points to their nearest neigbhor pixel
+            # and discard points that are too far
             tim1 = time.time()
-            tree = cKDTree(points[::10])
+            tree = cKDTree(ref_points[::100])
             distances, _ = tree.query(grid_points)
             distances = distances.reshape(pxreg.shape)
             tim2 = time.time()
 
-            print(tim2 - tim1)
+            toofar = distances > 0.09
 
-            #interp = griddata(points, val[cond], (pxreg, pyreg, pzreg), method="nearest")
-            #interp = interp.reshape(pxreg.shape).astype(float)
-
-            toofar = distances > 0.08
-            #interp[toofar] *= np.nan
             pxreg[toofar] *= np.nan
             pyreg[toofar] *= np.nan
             pzreg[toofar] *= np.nan
 
+            print(tim2 - tim1)
+
             # Dewarping instead of interpolation
-            # 3. Application of rotation matrix
+            # Application of rotation matrix to the regular grid of zenith and azimuth
             rotation_mat = np.dot(self.ry(-roll), self.rx(-pitch))  # 180 around z and 90 around x
             nnpx, nnpy, nnpz = self.rotation(pxreg, pyreg, pzreg, rotation_mat)
 
@@ -363,122 +283,34 @@ class Radiance(cameracontrol.ProcessImage):
             dewarped = np.zeros((theta.shape[0], theta.shape[1], 3))
 
             for i in range(len(dewarped.shape)):
-                dewarped[:, :, i] = self.dewarp(self.imradiance[:, :, i], theta, phi)
+                de = self.dewarp(self.imradiance[:, :, i], theta, phi)
+                de = np.where(np.isnan(theta), 0, de)
+                dewarped[:, :, i] = de
 
             # 5. Storing new radiance map image
             self.radiance_map = dewarped
             self.zenith_vect = zenith_vector
             self.azimuth_vect = azimuth_vector
 
-            # Viz
-            fig1 = plt.figure()
-            ax1 = fig1.add_subplot(111, projection="3d")
-
-            #ax1.scatter(npx[::10, ::10], npy[::10, ::10], npz[::10, ::10])
-            ax1.scatter(pxreg[::10, ::10], pyreg[::10, ::10], pzreg[::10, ::10])
-            ax1.scatter(nnpx[::10, ::10], nnpy[::10, ::10], nnpz[::10, ::10])
-            ax1.set_xlabel("Xaxis")
-            ax1.set_ylabel("Yaxis")
-            ax1.set_zlabel("Zaxis")
+            # # Viz
+            # fig1 = plt.figure()
+            # ax1 = fig1.add_subplot(111, projection="3d")
             #
-            fig2 = plt.figure()
-            ax2 = fig2.add_subplot(121)
-            ax3 = fig2.add_subplot(122)
-
-            ax2.imshow(distances)
-            ax3.imshow(dewarped[:, :, 0])
-
-            plt.show()
-
-            return dewarped
-
-        else:
-            raise ValueError("Demosaic should be done before building radiance mapping.")
-
-
-    def makeradiancemap_am(self, medium, orientation, angular_res=1.0):
-        """
-        New version of radiance mapping. It now uses information about the medium to set the camera limits in zenith
-        and azimuth as well as the roll, pitch and yaw angles.
-
-        :param medium:
-        :param orientation:
-        :param angular_res:
-        :return:
-        """
-
-        if len(self.imradiance.shape) == 3:
-
-            degradconst = pi/180
-
-            roll = orientation[0] * degradconst
-            pitch = orientation[1] * degradconst
-            yaw = orientation[2] * degradconst
-
-            if medium.lower() == "air":
-                cam_zen_limits = np.array([0.5, 179.5]) * degradconst  # Preve?nt division by 0 ?
-                #cam_az_limits = np.array([-89.5, 89.5]) * degradconst
-                cam_az_limits = np.array([0.5, 179.5]) * degradconst
-
-            elif medium.lower() == "water":
-                cam_zen_limits = np.array([10, 170]) * degradconst
-                cam_az_limits = np.array([10, 170]) * degradconst
-            else:
-                raise ValueError("Invalid argument medium.")
-
-            # Building meshgrid
-            nb_zen = np.round(abs(cam_zen_limits[1] - cam_zen_limits[0]) / (angular_res * degradconst)) + 1
-            nb_az = np.round(abs(cam_az_limits[1] - cam_az_limits[0]) / (angular_res * degradconst)) + 1
-
-            zen_vector = np.linspace(cam_zen_limits[0], cam_zen_limits[1], nb_zen.astype(int))  # rads
-            az_vector = np.linspace(cam_az_limits[0], cam_az_limits[1], nb_az.astype(int))  # rads
-
-            az, zen = np.meshgrid(az_vector, zen_vector)  # Meshgrid
-
-            # Converting into world coordinates with Z pointing upward
-            px, py, pz = self.points_3d(zen, az)
-
-            theta = np.arccos(py)
-            phi = np.arctan2(pz, px)
-
-            # Dewarping
-            dewarped = np.zeros((theta.shape[0], theta.shape[1], 3))
-
-            for i in range(len(dewarped.shape)):
-                dewarped[:, :, i] = self.dewarp(self.imradiance[:, :, i], theta, phi)
-
-            # Rotation of coordinates according to IMU data
-            matrix_rotation = np.dot(np.dot(self.rz(yaw), self.ry(pitch)), self.rx(roll))
-            npx, npy, npz = self.rotation(px, py, pz, matrix_rotation)
-
-            azimuth_array = np.arctan2(npy, npx)
-            zenith_array = np.arccos(npz)
-
-            print(np.min(np.min(zenith_array)) * 180/pi)
-            print(np.max(np.max(zenith_array)) * 180/pi)
-
-            print(np.min(np.min(azimuth_array)) * 180 / pi)
-            print(np.max(np.max(azimuth_array)) * 180 / pi)
-
-
-            plt.figure()
-            plt.imshow(azimuth_array*180 / pi)
-
-            plt.figure()
-            plt.imshow(zenith_array*180 / pi)
-
-            fig20 = plt.figure()
-            ax20 = fig20.add_subplot(111, projection="3d")
-
-            ax20.scatter(npx, npy, npz)
-            ax20.set_xlabel("Xaxis")
-            ax20.set_ylabel("Yaxis")
-            ax20.set_zlabel("Zaxis")
-
-            # 5. Storing new radiance map image
-            self.radiance_map = dewarped
-            self.zenith_vect = zenith_array[:, 0]
-            self.azimuth_vect = azimuth_array[0, :]
+            # #ax1.scatter(npx[::10, ::10], npy[::10, ::10], npz[::10, ::10])
+            # ax1.scatter(pxreg[::10, ::10], pyreg[::10, ::10], pzreg[::10, ::10])
+            # ax1.scatter(nnpx[::10, ::10], nnpy[::10, ::10], nnpz[::10, ::10])
+            # ax1.set_xlabel("Xaxis")
+            # ax1.set_ylabel("Yaxis")
+            # ax1.set_zlabel("Zaxis")
+            # #
+            # fig2 = plt.figure()
+            # ax2 = fig2.add_subplot(121)
+            # ax3 = fig2.add_subplot(122)
+            #
+            # ax2.imshow(distances)
+            # ax3.imshow(dewarped[:, :, 0])
+            #
+            # plt.show()
 
             return dewarped
 
@@ -591,6 +423,17 @@ class Radiance(cameracontrol.ProcessImage):
         else:
             print("2d map of spectral radiance has not been calculated.")
 
+    def azimuthal_integration_simpson(self):
+        """
+        Azimuthal average of 2D map using Simpson's Rule.
+        :return:
+        """
+
+        if self.radiance_map.any():
+            return integrate.simps(self.radiance_map, x=self.azimuth_vect, axis=1)
+        else:
+            print("2d map of spectral radiance has not been calculated.")
+
     def zenithal_integration(self):
         """
         Zenithal average of spectral radiance 2D map.
@@ -600,6 +443,18 @@ class Radiance(cameracontrol.ProcessImage):
 
         if self.radiance_map.any():
             return np.trapz(self.radiance_map, x=self.zenith_vect, axis=0)
+
+        else:
+            print("2d map of spectral radiance haven't been calculated.")
+
+    def zenithal_integration_simpsion(self):
+        """
+         Zenithal average of 2D map using Simpson's Rule.
+         :return:
+        """
+
+        if self.radiance_map.any():
+            return integrate.simps(self.radiance_map, x=self.zenith_vect, axis=0)
 
         else:
             print("2d map of spectral radiance haven't been calculated.")
@@ -840,12 +695,8 @@ if __name__ == "__main__":
     #RAD.radiancemap_rotation("air", np.array([0, 0, 180]), angular_res=10)
 
     RAD.absolute_radiance()
-    timestart = time.time()
-    RAD.radiancemap_interpolation("air", np.array([45, 0, 0]), angular_res=1)
+    RAD.radiancemap_interpolation(np.array([45, 0, 0]), angular_res=0.5)
     #RAD.makeradiancemap([0.5, 179.5], [0.5, 179.5], np.array([45, 0, 0]), angular_res=0.5)
-    timeend = time.time()
-
-    print(timeend - timestart)
 
     #plt.show()
 
@@ -872,3 +723,34 @@ if __name__ == "__main__":
     # plt.plot(RAD.zenith_vect * 180/pi, azi_avg[:, 2], "b")
 
     # plt.show()
+
+    # Test of integration when NaN are replaced by 0
+    #zenith_vect = np.linspace(0, 90, 100) * pi/180
+    # zenith_vect = np.linspace(0, 180, 180) * pi / 180
+    # azimuth_vect = np.linspace(0, 360, 360) * pi / 180
+    #
+    # print(zenith_vect)
+    #
+    # azi, zen = np.meshgrid(azimuth_vect, zenith_vect)
+    #
+    # remove = zen > pi/2
+    #
+    # L = (0.1 - (0.02 * zen**2)) * np.cos(zen) * np.sin(zen)
+    #
+    # L[remove] = 0
+    #
+    # Edref = 0.268059535
+    # Ed = np.trapz(np.trapz(L, x=azimuth_vect, axis=1), x=zenith_vect, axis=0)
+    # Edsimps = integrate.simps(integrate.simps(L, x=azimuth_vect, axis=1), x=zenith_vect, axis=0)
+    # print(Ed)
+    # print(Edsimps)
+    #
+    # errEd = 100 * (abs(Edref - Ed)/Edref)
+    # errEdsimps = 100 * (abs(Edref - Edsimps) / Edref)
+    #
+    # print(errEd)
+    # print(errEdsimps)
+
+
+
+

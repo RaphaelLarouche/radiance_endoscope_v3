@@ -65,15 +65,19 @@ class CameraThread(QtCore.QThread):
     def run(self):
 
         while self.running:
+
             self.update_camera()
 
             self.verify_temp()
 
             self.cam.get_image(self.img)
 
+            ori = self.orientation  # Store orientation right away
+
             data_raw = self.img.get_image_data_numpy()
             data_raw = data_raw[::-1, :]
 
+            # Saturation signal
             if np.any(data_raw >= (2**12) - 1):
                 numpixel = np.sum(data_raw >= (2**12) - 1)
                 self.my_signal_saturation.emit("{0} pixels saturated".format(numpixel))
@@ -83,12 +87,13 @@ class CameraThread(QtCore.QThread):
             # Metadata in dictionary
             met_dict = self.metadata_xiMU(self.img)
 
-            radclass = radiance.Radiance(data_raw, met_dict, self.medium.lower(), "test")  # Values to be changed
-            radclass.absolute_radiance()
-            radclass.makeradiancemap([0.5, 179.5], [0.5, 179.5], angular_res=0.5)
-            #radclass.makeradiancemap_am(self.medium, self.orientation, angular_res=0.5)
+            path_dummy = "test"
 
-            azi_average = radclass.azimuthal_integration()
+            radclass = radiance.Radiance(data_raw, met_dict, self.medium.lower(), path_dummy)  # Values to be changed
+            radclass.absolute_radiance()
+            radclass.makeradiancemap([0.5, 179.5], [0.5, 179.5], ori, angular_res=0.5)
+
+            azi_average = radclass.azimuthal_integration()  # Azimuthal integration
 
             self.my_signal.emit(radclass.zenith_vect * 180/np.pi, azi_average[:, 0], azi_average[:, 1], azi_average[:, 2])
 

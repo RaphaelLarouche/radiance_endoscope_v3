@@ -64,6 +64,12 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.pgreen = self.pyqtplot(np.array([0]), np.array([0]), "528 nm", "g")
         self.pblue = self.pyqtplot(np.array([0]), np.array([0]), "466 nm", "b")
 
+        self.ui.visualisationWindow.plotItem.showGrid(x=True, y=True, alpha=0.7)
+
+        # self.graphtext = pyqtgraph.TextItem(anchor=(0, -6.5))
+        # self.graphtext.setParentItem(self.ui.visualisationWindow.plotItem)
+        # self.graphtext.setText("O pixel saturated")
+
         self.ui.visualisationWindow.plotItem.setLabel("left", "D.N normalized")
         self.ui.visualisationWindow.plotItem.setLabel("bottom", "Zenith angle [˚]")
 
@@ -72,10 +78,10 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.ui.gainDoubleSpinBox.setKeyboardTracking(False)
 
         # Connections and signals ___________________________________________________________________
-        self.ui.exposureSlider.valueChanged.connect(self.exposure_slider)
+        self.ui.exposureSlider.valueChanged.connect(self.exposure_slider)  # Sliders
         self.ui.gainSlider.valueChanged.connect(self.gain_slider)
 
-        self.ui.exposureSpinBox.valueChanged.connect(self.exposure_spin)
+        self.ui.exposureSpinBox.valueChanged.connect(self.exposure_spin)  # Spinboxes
         self.ui.gainDoubleSpinBox.valueChanged.connect(self.gain_spin)
 
         self.ui.binComboBox.currentTextChanged.connect(self.bin_combobox)
@@ -98,6 +104,7 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         self.camera_thread.my_signal.connect(self.plot_avg)
         self.camera_thread.my_signal_temperature.connect(self.ui.boardTemp.setText)
         self.camera_thread.my_signal_saturation.connect(self.ui.saturation.setText)
+        #self.camera_thread.my_signal_saturation.connect(self.graphtext.setText)
 
         # Starting IMU Thread (Always running to be able to record and save the angles even when data is not live)
         self.euler_thread.running = True
@@ -126,6 +133,10 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             self.cam.stop_acquisition()
 
     def water_air_radiobutton(self):
+        """
+        Radio button for water or air medium.
+        :return:
+        """
         if self.ui.water.isChecked():
                 print(self.ui.water.text())
                 self.camera_thread.medium = self.ui.water.text()
@@ -338,6 +349,60 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
         else:
             raise ValueError("Not the type of metadata expected. Should be a xiapi.Ximage instance.")
 
+    @ staticmethod
+    def generate_exposure(initial_exposure, imnumber):
+        """
+        Function that generates a number of imnumber of exposures over 1 order of magnitude.
+
+        :param initial_exposure: current exposure
+        :param imnumber: number of image wanted between 1x and 10x
+        :return:
+        """
+        linmul = 10 ** np.linspace(0, 1, imnumber)
+        exposure = initial_exposure * linmul
+
+        if exposure[-1] >= 3000000:
+            exposure[-1] = 3000000
+
+        return exposure.astype(int)
+
+    def acquisition_multiple_exposure(self, imnumber):
+
+        if self.status:
+
+            # Update camera paramters
+            self.update_camera()
+            # Generate exposure over 2 order of magnitude
+            exposures = self.generate_exposure(self.exp, imnumber)
+
+            image_list = []
+            metadata_list = []
+
+            for exp in exposures:
+                self.cam.set_exposure(exp)
+                self.verify_temp()
+
+                print("Starting data acquisition...")
+                self.cam.start_acquisition()
+                self.cam.get_image(self.img)
+
+                data_raw = self.img.get_image_data_numpy()
+                data_raw = data_raw[::-1, :]
+
+                # Metadata in dictionary
+                met_dict = self.metadata_xiMU(self.img)
+
+                print("Stopping acquisition...")
+                self.cam.stop_acquisition()
+
+                # Storing
+                image_list.append(data_raw)
+                metadata_list.append(met_dict)
+
+            self.update_camera()  # Re-updating camera to initial parameters
+
+            return image_list, metadata_list
+
     def acquisition(self):
         """
         Acquisition of one image from transport buffer.
@@ -382,15 +447,21 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 cond = self.ui.live.isChecked()
                 self.ui.live.setChecked(False)  # Stopping realtime data
 
-                # Acquisition
-                image, metadata = self.acquisition()
-
                 # Save
                 today = datetime.datetime.utcnow()
                 depth = self.ui.depth.value()
                 path = self.longpath + "/IMG_" + today.strftime("%Y%m%d_%H%M%S_UTC_") + str(depth) + "cm" + ".tif"
 
-                self.saveTIFF_xiMU(path, image, metadata)
+                # Acquisition
+                if self.ui.multiple_exp.isChecked():
+                    image_list, metadata_list = self.acquisition_multiple_exposure(3)
+                    self.saveTIFF_xiMU_multiple_exposure(path, image_list, metadata_list)
+                else:
+                    image_list, metadata_list = self.acquisition_multiple_exposure(1)
+                    self.saveTIFF_xiMU_multiple_exposure(path, image_list, metadata_list)
+
+                    #image, metadata = self.acquisition()
+                    #self.saveTIFF_xiMU(path, image, metadata)
 
                 if cond:
                     self.ui.live.setChecked(True)  # Restarting realtime data
@@ -416,13 +487,20 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 cond2 = self.ui.live.isChecked()
                 self.ui.live.setChecked(False)
 
-                # Acquisition
-                image, metadata = self.acquisition()
                 # Save
                 today = datetime.datetime.utcnow()
                 path = self.longpath + "/DARK_" + today.strftime("%Y%m%d_%H%M%S_UTC") + ".tif"  # year/month/day
 
-                self.saveTIFF_xiMU(path, image, metadata)
+                # Acquisition
+                if self.ui.multiple_exp.isChecked():
+                    image_list, metadata_list = self.acquisition_multiple_exposure(3)
+                    self.saveTIFF_xiMU_multiple_exposure(path, image_list, metadata_list)
+                else:
+                    image_list, metadata_list = self.acquisition_multiple_exposure(1)
+                    self.saveTIFF_xiMU_multiple_exposure(path, image_list, metadata_list)
+
+                    #image, metadata = self.acquisition()
+                    #self.saveTIFF_xiMU(path, image, metadata)
 
                 if cond2:
                     self.ui.live.setChecked(True)

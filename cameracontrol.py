@@ -17,6 +17,7 @@ import matplotlib.patches as mpatches
 from scipy.optimize import curve_fit
 import os
 from scipy import stats
+import json
 
 
 # Others modules
@@ -53,6 +54,17 @@ class ProcessImage:
             else:
                 dc[str(key.strip()[1:-1:1])] = float(val.strip())
         return dc
+
+    @staticmethod
+    def readTiff_xiMU_multiple_exposure(path):
+
+        with tifffile.TiffFile(path) as tif:
+            data = tif.asarray()
+            metadata = tif.pages[0].tags["ImageDescription"].value
+
+        metadata = json.loads(metadata)  # Transformation of the string description to dictionnary!
+
+        return data, metadata
 
     @staticmethod
     def readDNG(path):
@@ -639,6 +651,23 @@ class ProcessImage:
         else:
             raise ValueError("Only raw bayer mosaic image can be saved.")
 
+    def saveTIFF_xiMU_multiple_exposure(self, path, list_raw_images, list_metadata):
+        """
+        Save multiple image taken with different exposures. The input must be a list of the raw images with a list of the
+        corresponding metadata.
+
+        :return:
+        """
+
+        # Building dictionnary of dictionnary
+        met_tot = {}
+        for n, metadata in enumerate(list_metadata):
+            imname = "Image{0:03}".format(n+1)
+            met_tot[imname] = metadata
+
+        images_stack = np.stack(list_raw_images)
+        tifffile.imwrite(path, images_stack.astype(int), metadata=met_tot)
+
 
 # First class TakeImage
 class TakeImage(ProcessImage):
@@ -719,10 +748,10 @@ class TakeImage(ProcessImage):
             for i in structure._fields_:
                 if isinstance(getattr(structure, i[0]), int) or isinstance(getattr(structure, i[0]), float):
                     met_dict[i[0]] = getattr(structure, i[0])
-            if len(met_dict) == 32:
+            if len(met_dict) == 30:
                 return met_dict
             else:
-                raise ValueError("Expect 32 values in the dictionary.")
+                raise ValueError("Expect 32 values in the dictionary, got {0}.".format(len(met_dict)))
         else:
             raise ValueError("Not the type of metadata expected. Should be a xiapi.Ximage instance.")
 
@@ -914,14 +943,35 @@ class TakeImage(ProcessImage):
 
 if __name__ == "__main__":
 
-    #Script when the files cameracontrol.py is executed. Can be used to test modules function.
-    ac = TakeImage(imageformat="raw")
-    acim = ac.acquisition(exposuretime=15000, gain=0, binning="4x4", video=False)
-    ac.end()
+    import glob
 
-    plt.figure()
-    plt.imshow(acim[0])
-    plt.show()
+    files = glob.glob("/home/pi/Desktop/test18mars/ParcBic_20200319/profile_001" + "/IMG*.tif")
+
+    a = ProcessImage()
+
+    for f in files[5:6]:
+        data, met = a.readTiff_xiMU_multiple_exposure(f)
+
+        for i, m in enumerate(met.keys()):
+            if m != "shape":
+                plt.figure()
+                plt.imshow(data[i, :, :])
+                plt.title(m + str(met[m]["exposure_time_us"]))
+                plt.show()
+
+    #Script when the files cameracontrol.py is executed. Can be used to test modules function.
+    # exp = [200, 2000, 200000]
+    # raw_ima = []
+    # met = []
+    # ac = TakeImage(imageformat="raw")
+    # for i in exp:
+    #     acim = ac.acquisition(exposuretime=i, gain=0, binning="4x4", video=False)
+    #     raw_ima.append(acim[0])
+    #     met.append(acim[1])
+
+    # plt.figure()
+    # plt.imshow(acim[0])
+    # plt.show()
 
     #ac.saveTIFF_xiMU("test.tif", acim[0], acim[1])
 
@@ -1035,4 +1085,4 @@ if __name__ == "__main__":
     # bandsax[2].imshow(sep[2])
     # bandsax[2].set_title("$\mu$ = {0:.3f}".format(sep[2].mean()))
 
-    plt.show()
+    #plt.show()

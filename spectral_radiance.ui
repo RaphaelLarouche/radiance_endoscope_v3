@@ -401,6 +401,13 @@
               </widget>
              </item>
              <item>
+              <widget class="QCheckBox" name="multiple_exp">
+               <property name="text">
+                <string>Multi-exposure</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QSpinBox" name="depth">
                <property name="alignment">
                 <set>Qt::AlignCenter</set>
