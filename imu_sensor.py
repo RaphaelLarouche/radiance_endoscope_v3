@@ -94,7 +94,7 @@ class MinIMUv5(MinIMU_v5_pi):
             print("Calibration starts in {0:d} s".format(seconds - i))
             time.sleep(1)
 
-    def magnetometer_calibration(self):
+    def magnetometer_calibration(self, save=True):
 
         # Data acquisition
         s = np.array([])
@@ -120,7 +120,8 @@ class MinIMUv5(MinIMU_v5_pi):
         print(self.b)  # Hard iron
 
         # Save results
-        self.save_magcal()
+        if save:
+            self.save_magcal()
 
         # Show results
         self.results(s)
@@ -253,7 +254,7 @@ class MinIMUv5(MinIMU_v5_pi):
         #self.Q[0, 0] = roll_std ** 2
         #self.Q[1, 1] = pitch_std ** 2
 
-        print("Accelerometer offsets: " + "roll " + str(roll_offset) + "," + "pitch " +  str(pitch_offset))
+        print("Accelerometer offsets: " + "roll " + str(roll_offset) + "," + "pitch " + str(pitch_offset))
 
         self.roll_off = roll_offset * np.pi/180
         self.pitch_off = pitch_offset * np.pi/180
@@ -309,7 +310,7 @@ class MinIMUv5(MinIMU_v5_pi):
 
     def kalman_filter(self, disp=False):
         """
-        For roll and pitch angles.
+        Kalman filters for roll and pitch angles. The Heading data still use a complementary filter.
 
         :return:
         """
@@ -318,30 +319,34 @@ class MinIMUv5(MinIMU_v5_pi):
         [Gx, Gy, Gz] = self.readGyro()
         [Mx, My, Mz] = self.magnetometer_correction(self.readMagnetometer())  # Magnetometer readings corrected
 
-        # Transform gyro in rad/s
-        Gx *= np.pi/180
-        Gy *= np.pi/180
-        Gz *= np.pi/180
-
         # Time update
         if self.timekalman == 0:
             self.timekalman = time.time()
 
         dt = time.time() - self.timekalman
 
-        # Measurements
-        pitch = math.atan2(-Ax, math.sqrt(Ay ** 2 + Az ** 2)) - self.pitch_off
+        # Transform gyro in rad/s
+        Gx *= np.pi/180
+        Gy *= np.pi/180
+        Gz *= np.pi/180
+
+        # Measurements roll and pitch
         roll = math.atan2(Ay, Az) - self.roll_off
-        yaw = math.atan2(-My, Mx) + np.pi
+        pitch = math.atan2(-Ax, math.sqrt(Ay ** 2 + Az ** 2)) - self.pitch_off
 
-        # Angular velocity in inertial frame
-        roll_dot = Gx + Gy * np.sin(self.roll_hat) * np.tan(self.pitch_hat) + Gz * np.cos(self.roll_hat) * np.tan(self.pitch_hat)
-        pitch_dot = Gx * np.cos(self.roll_hat) - Gy * np.sin(self.roll_hat)
-        yaw_dot = Gy * np.sin(self.roll_hat)/np.cos(self.pitch_hat) + Gz * np.cos(self.roll_hat)/np.cos(self.pitch_hat)
+        # Filtering
+        alpha = self.tau / (self.tau + dt)
+        Gxa = self.roll_hat + Gx * dt
+        Gya = self.pitch_hat + Gy * dt
+        Gza = self.yaw_hat + Gz * dt  # In body frame  !!!!
 
-        # Yaw
-        Gza = self.yaw_hat + yaw_dot * dt  # Yaw in intertial frame !!!!
-        #Gza = self.yaw_hat + Gz * dt  # In body frame  !!!!
+        roll = (alpha * Gxa) + ((1 - alpha) * roll)
+        pitch = (alpha * Gya) + ((1 - alpha) * pitch)
+
+        # Tilt compensation for measurement of magnetometer parallel with magnetic field
+        Mxh = Mx * np.cos(pitch) + My * np.sin(pitch) * np.sin(roll) + Mz * np.sin(pitch) * np.cos(roll)
+        Myh = -Mz * np.sin(roll) + My * np.cos(roll)
+        yaw = math.atan2(-Myh, Mxh) + np.pi
 
         if Gza - yaw > np.pi:
             Gza -= 2 * np.pi
@@ -349,8 +354,16 @@ class MinIMUv5(MinIMU_v5_pi):
             Gza += 2 * np.pi
 
         # This combines a LPF on phi, rho, and theta with a HPF on the Gyro values
-        alpha = self.tau / (self.tau + dt)
         self.yaw_hat = (alpha * Gza) + ((1 - alpha) * yaw)
+
+        # Angular velocity in inertial frame
+        roll_dot = Gx + Gy * np.sin(self.roll_hat) * np.tan(self.pitch_hat) + Gz * np.cos(self.roll_hat) * np.tan(self.pitch_hat)
+        pitch_dot = Gx * np.cos(self.roll_hat) - Gy * np.sin(self.roll_hat)
+        yaw_dot = Gy * np.sin(self.roll_hat)/np.cos(self.pitch_hat) + Gz * np.cos(self.roll_hat)/np.cos(self.pitch_hat)
+
+        # Yaw filtering
+        # Gza = self.yaw_hat + yaw_dot * dt  # Yaw in intertial frame !!!!
+        # Gza = self.yaw_hat + Gz * dt  # In body frame  !!!!
 
         gyro_input = np.array([[roll_dot], [pitch_dot]])
 
@@ -374,12 +387,13 @@ class MinIMUv5(MinIMU_v5_pi):
         self.roll_hat = self.x_estimate[0, 0]
         self.pitch_hat = self.x_estimate[2, 0]
 
+        # Posterior error covariance
+        self.P = (np.eye(4) - K.dot(C)).dot(self.P)
+
+        # Transforming angles in rad to degrees
         rhat = self.roll_hat * 180/np.pi
         phat = self.pitch_hat * 180/np.pi
         yhat = self.yaw_hat * 180/np.pi
-
-        # Posterior error covariance
-        self.P = (np.eye(4) - K.dot(C)).dot(self.P)
 
         # Printing results
         if disp:
@@ -456,13 +470,12 @@ class MinIMUv5(MinIMU_v5_pi):
             time.sleep(0.004)
 
     def trackAngleKalman(self):
-        self.acc_offsets()
+        #self.acc_offsets()
         thread.start_new_thread(self.track_angle_thread_kalman, ())
 
     def track_angle_thread_kalman(self):
         while True:
-            self.kalman_filter()
-            #time.sleep(0.5)
+            self.kalman_filter(disp=True)
             time.sleep(0.004)
 
     def start_anim(self):
@@ -493,8 +506,10 @@ class MinIMUv5(MinIMU_v5_pi):
 if __name__ == "__main__":
     sens = MinIMUv5()
 
-    #sens.magnetometer_calibration()  # calibration
+    sens.magnetometer_calibration(save=False)  # calibration
 
     #sens.start_anim()
 
-    #sens.trackAngleKalman()
+    sens.trackAngleKalman()
+
+    plt.show()

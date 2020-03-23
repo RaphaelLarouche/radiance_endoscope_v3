@@ -239,7 +239,7 @@ class Radiance(cameracontrol.ProcessImage):
             cond = ~np.isnan(npx)
             ref_points = np.c_[npx[cond], npy[cond], npz[cond]]  # reference points of camera
 
-            # Building Regular grid over 4 pi steradian
+            # Building a regular spaced grid over 4 pi steradian
             limits_zen = np.array([0.5, 179.5]) * pi / 180
             limits_az = np.array([0.5, 359.5]) * pi / 180
 
