@@ -11,7 +11,6 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 import glob
 
-import smbus as smbus
 import time
 import math
 import _thread as thread
@@ -51,9 +50,6 @@ class MinIMUv5(MinIMU_v5_pi):
             self.b = magcal["b"]
             self.A = magcal["A"]
 
-        # For calibration
-        #self.sensor = MinIMU_v5_pi()
-
         # Animation
         self.fig = False
         self.timeanim = False
@@ -67,10 +63,8 @@ class MinIMUv5(MinIMU_v5_pi):
         self.P = np.eye(4)
         self.Q = np.eye(4)
         self.R = np.eye(2) * 2
-        #self.R = np.eye(2) * 0.01
 
         Qmul = np.array([2, 0.03, 2, 0.03])
-        #Qmul = np.array([10, 10, 10, 10])
         self.Q *= Qmul[:, None]
 
         self.x_estimate = np.zeros((4, 1))
@@ -470,7 +464,6 @@ class MinIMUv5(MinIMU_v5_pi):
             time.sleep(0.004)
 
     def trackAngleKalman(self):
-        #self.acc_offsets()
         thread.start_new_thread(self.track_angle_thread_kalman, ())
 
     def track_angle_thread_kalman(self):
