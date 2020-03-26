@@ -258,18 +258,16 @@ class Radiance(cameracontrol.ProcessImage):
             # Building a cKDTree to have distance between each regular gridded points to their nearest neigbhor pixel
             # and discard points that are too far
             tim1 = time.time()
-            tree = cKDTree(ref_points[::100])
+            tree = cKDTree(ref_points[::150])
             distances, _ = tree.query(grid_points)
             distances = distances.reshape(pxreg.shape)
-            tim2 = time.time()
+            print(time.time() - tim1)
 
-            toofar = distances > 0.09
+            toofar = distances > 0.2
 
             pxreg[toofar] *= np.nan
             pyreg[toofar] *= np.nan
             pzreg[toofar] *= np.nan
-
-            print(tim2 - tim1)
 
             # Dewarping instead of interpolation
             # Application of rotation matrix to the regular grid of zenith and azimuth

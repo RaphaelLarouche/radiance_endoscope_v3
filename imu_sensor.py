@@ -49,6 +49,12 @@ class MinIMUv5(MinIMU_v5_pi):
         # Animation
         self.fig = False
         self.timeanim = False
+        self.pl1 = False
+        self.pl2 = False
+        self.pl3 = False
+
+        #self.magread = np.array([])
+        self.magread = []
 
         # Kalman filter __________________
         self.timekalman = 0
@@ -86,17 +92,28 @@ class MinIMUv5(MinIMU_v5_pi):
 
     def magnetometer_calibration(self, save=True):
 
+        # #self.fig, self.ax = plt.subplots(1, 1)
+        # self.fig = plt.figure()
+        # self.ax = self.fig.add_subplot(111)
+        # self.pl1, = self.ax.plot([], [])
+        # self.pl2, = self.ax.plot([], [])
+        # self.pl3, = self.ax.plot([], [])
+        #
+        # anim = animation.FuncAnimation(self.fig, self.animcalibration_, frames=100, interval=0.004, repeat=False, blit=True)
+        # plt.show()
+
         # Data acquisition
         s = np.array([])
         self.timer(5)
 
         print("Move the sensor around each axis.")
-        print("X Y Z")
         for i in range(3000):
-            read_mag = np.array(self.readMagnetometer())
+            read_mag = np.array(self.readMagnetometer()[0])
             print("{0:.3f} {1:.3f} {2:.3f}".format(read_mag[0], read_mag[1], read_mag[2]))
             s = np.append(s, read_mag)
-            time.sleep(0.009)
+            self.magread = read_mag
+
+            time.sleep(0.004)
 
         s = np.reshape(s, (-1, 3))
         # Fit
@@ -163,7 +180,7 @@ class MinIMUv5(MinIMU_v5_pi):
         # v_1 (eq. 15, solution)
         E = np.dot(linalg.inv(C), S_11 - np.dot(S_12, np.dot(linalg.inv(S_22), S_21)))
 
-        E_w, E_v = np.linalg.eig(E)
+        E_w, E_v = np.linalg.eig(E)  # Eigenvalues, Eigenvectors
 
         v_1 = E_v[:, np.argmax(E_w)]
         if v_1[0] < 0: v_1 = -v_1
@@ -307,7 +324,7 @@ class MinIMUv5(MinIMU_v5_pi):
         # IMU sensors read
         [Ax, Ay, Az] = self.readAccelerometer()
         [Gx, Gy, Gz] = self.readGyro()
-        [Mx, My, Mz] = self.magnetometer_correction(self.readMagnetometer())  # Magnetometer readings corrected
+        [Mx, My, Mz] = self.magnetometer_correction(self.readMagnetometer()[0])  # Magnetometer readings corrected
 
         # Time update
         if self.timekalman == 0:
@@ -401,7 +418,7 @@ class MinIMUv5(MinIMU_v5_pi):
         """
         [Ax, Ay, Az] = self.readAccelerometer()
         [Gx_w, Gy_w, Gz_w] = self.readGyro()
-        [Mx, My, Mz] = self.magnetometer_correction(self.readMagnetometer())
+        [Mx, My, Mz] = self.magnetometer_correction(self.readMagnetometer()[0])
 
         if self.lastTimeAngle[0] == 0:  # First time using updatePos
             self.lastTimeAngle[0] = time.time()
@@ -508,6 +525,43 @@ class MinIMUv5(MinIMU_v5_pi):
         self.ax[0].plot(time_diff, roll_k, "b.")
         self.ax[1].plot(time_diff, pitch_k, "b.")
         self.ax[2].plot(time_diff, yaw_k, "b.")
+
+    def animcalibration_(self, i):
+        print("Frame number {}".format(i))
+
+        read_mag = np.array(self.readMagnetometer()[0])
+        #self.magread = np.append(self.magread, read_mag)
+        self.magread.append(read_mag[0])
+
+
+
+        print(self.magread)
+
+        self.pl1.set_data(1, 2)
+        self.pl2.set_data(2, 3)
+
+        #self.pl1.set_ydata(read_mag[1])
+        # self.pl2.set_data(self.magread[:, 0], self.magread[:, 2])
+        # self.pl3.set_data(self.magread[:, 2], self.magread[:, 2])
+        # self.ax.scatter(read_mag[0], read_mag[1], c="r", label="XY")
+        # self.ax.scatter(read_mag[0], read_mag[2], c="g", label="XZ")
+        # self.ax.scatter(read_mag[1], read_mag[2], c="b", label="YZ")
+
+        #return self.pl1, self.pl2, self.pl3
+        return [self.pl1, self.pl2, self.pl3]
+
+    def animcalibinit(self):
+
+        self.pl1.set_data([], [])
+        self.pl2.set_data([], [])
+        self.pl3.set_data([], [])
+
+        # self.pl1 = self.ax.scatter(self.magread, self.magread, c="r")
+        # self.pl2 = self.ax.scatter(self.magread, self.magread, c="g")
+        # self.pl3 = self.ax.scatter(self.magread, self.magread, c="b")
+
+        return self.pl1, self.pl2, self.pl3,
+
 
 
 if __name__ == "__main__":

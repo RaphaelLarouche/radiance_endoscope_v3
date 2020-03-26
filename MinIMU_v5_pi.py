@@ -164,7 +164,8 @@ class MinIMU_v5_pi:
 
 		#default: 0b01110000
 		#Temp off, High-Performance, ODR = 300Hz, Self_test off
-		self.bus.write_byte_data(self.mag, self.Mag_REG['CTRL_REG1'], 0b01010010)
+		#self.bus.write_byte_data(self.mag, self.Mag_REG['CTRL_REG1'], 0b01010010)
+		self.bus.write_byte_data(self.mag, self.Mag_REG['CTRL_REG1'], 0b11010010)
 		
 		#default: 0b00000000
 		# +/-4guass, reboot off, soft_reset off
@@ -183,13 +184,22 @@ class MinIMU_v5_pi:
 		#   Reading low and high 8-bit register and converting the 16-bit
 		#two's complement number to decimal.
 		try:
-			AX = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTX_L_XL']), \
+			# AX = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTX_L_XL']), \
+			# 						self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTX_H_XL']))
+			#
+			# AY = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTY_L_XL']), \
+			# 						self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTY_H_XL']))
+			#
+			# AZ = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTZ_L_XL']), \
+			# 						self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTZ_H_XL']))
+
+			AX = self._combineSignedLoHi(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTX_L_XL']), \
 									self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTX_H_XL']))
 
-			AY = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTY_L_XL']), \
+			AY = self._combineSignedLoHi(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTY_L_XL']), \
 									self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTY_H_XL']))
 
-			AZ = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTZ_L_XL']), \
+			AZ = self._combineSignedLoHi(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTZ_L_XL']), \
 									self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTZ_H_XL']))
 		except:
 			#print "Error!"
@@ -205,13 +215,22 @@ class MinIMU_v5_pi:
 		#   Reading low and high 8-bit register and converting the 16-bit
 		#two's complement number to decimal.
 		try:
-			GX = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTX_L_G']), \
+			# GX = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTX_L_G']), \
+			# 						self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTX_H_G']))
+			#
+			# GY = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTY_L_G']), \
+			# 						self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTY_H_G']))
+			#
+			# GZ = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTZ_L_G']), \
+			# 						self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTZ_H_G']))
+
+			GX = self._combineSignedLoHi(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTX_L_G']), \
 									self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTX_H_G']))
 
-			GY = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTY_L_G']), \
+			GY = self._combineSignedLoHi(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTY_L_G']), \
 									self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTY_H_G']))
 
-			GZ = self.byteToNumber(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTZ_L_G']), \
+			GZ = self._combineSignedLoHi(self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTZ_L_G']), \
 									self.bus.read_byte_data(self.accel_gyro, self.Accel_Gyro_REG['OUTZ_H_G']))
 		except:
 			#print "Error!"
@@ -227,14 +246,29 @@ class MinIMU_v5_pi:
 		#   Reading low and high 8-bit register and converting the 16-bit
 		#two's complement number to decimal.
 		try:
-			MX = self.byteToNumber(self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_X_L']), \
+			# MX = self.byteToNumber(self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_X_L']), \
+			# 						self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_X_H']))
+			#
+			# MY = self.byteToNumber(self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Y_L']), \
+			# 						self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Y_H']))
+			#
+			# MZ = self.byteToNumber(self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Z_L']), \
+			# 						self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Z_H']))
+
+
+			MX = self._combineSignedLoHi(self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_X_L']), \
 									self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_X_H']))
 
-			MY = self.byteToNumber(self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Y_L']), \
+			MY = self._combineSignedLoHi(self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Y_L']), \
 									self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Y_H']))
 
-			MZ = self.byteToNumber(self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Z_L']), \
+			MZ = self._combineSignedLoHi(self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Z_L']), \
 									self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Z_H']))
+
+			# Temperature
+			TEMP = self._combineSignedLoHi(self.bus.read_byte_data(self.mag, self.Mag_REG["TEMP_OUT_L"]), self.bus.read_byte_data(self.mag, self.Mag_REG["TEMP_OUT_H"]))
+			TEMP /= 8.0
+			TEMP += 25
 		except:
 			#print "Error!"
 			return 0, 0, 0
@@ -243,7 +277,7 @@ class MinIMU_v5_pi:
 		MY *= self.mScale
 		MZ *= self.mScale
 
-		return [MX, MY, MZ]
+		return [MX, MY, MZ], TEMP
 
 	"""Combines Hi and Low 8-bit values to a 16-bit two's complement and
 	converts to decimal"""
@@ -252,16 +286,24 @@ class MinIMU_v5_pi:
 		if number >= 32768: #2^7 = 32768
 			number = number - 65536 #For two's complement
 		return number
-	 
-	 
-	
+
+	def _combineLoHi(self, loByte, hiByte):
+		""" Combine low and high bytes to an unsigned 16 bit value. """
+		return (loByte | hiByte << 8)
+
+	def _combineSignedLoHi(self, loByte, hiByte):
+		""" Combine low and high bytes to a signed 16 bit value. """
+		combined = self._combineLoHi(loByte, hiByte)
+		return combined if combined < 32768 else (combined - 65536)
+
+
 	"""updateAngle() uses readAccelerometer(), readGyro(), readMagnetometer() to find the current roll,
 	pitch, and yaw of the IMU with a complementaty filter.  It requires the global variables tau,
 	prevAngle, and lastTimeAngle to exist as well."""
 	def updateAngle(self):
 		[Ax, Ay, Az] = self.readAccelerometer()
 		[Gx_w, Gy_w, Gz_w] = self.readGyro()
-		[Mx, My, Mz] = self.readMagnetometer()
+		[Mx, My, Mz], TEMP = self.readMagnetometer()
 
 		if self.lastTimeAngle[0] == 0: #If this is the first time using updatePos
 			self.lastTimeAngle[0] = time.time()
@@ -311,7 +353,7 @@ class MinIMU_v5_pi:
 	and lastTimeYaw to exist as well."""
 	def updateYaw(self):
 		[Gx_w, Gy_w, Gz_w] = self.readGyro()
-		[Mx, My, Mz] = self.readMagnetometer()
+		[Mx, My, Mz], TEMP = self.readMagnetometer()
 
 		if self.lastTimeYaw[0] == 0: #If this is the first time using updatePos
 			self.lastTimeYaw[0] = time.time()
@@ -370,8 +412,8 @@ def main():
 	IMU.trackYaw()
 	IMU.trackAngle()
 	while True:
-		print(IMU.prevYaw[0])
-		print(IMU.prevAngle[0])
+		#print(IMU.prevYaw[0])
+		#print(IMU.prevAngle[0])
 		time.sleep(0.1)
 
 
