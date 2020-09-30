@@ -20,99 +20,95 @@ class MinIMU_v5_pi:
 	def __init__(self, SMBusNum = 1, aScale = 2*9.806/32768, gScale = 500.0/32768, mScale = 4.0/32768):
 
 		#Accelerometer and Gyro Register addresses
-		self.Accel_Gyro_REG = dict(  \
-		FUNC_CFG_ACCESS 	= 0x01, \
-									\
-		FIFO_CTRL1      	= 0x06, \
-		FIFO_CTRL2      	= 0x07, \
-		FIFO_CTRL3      	= 0x08, \
-		FIFO_CTRL4      	= 0x09, \
-		FIFO_CTRL5      	= 0x0A, \
-		ORIENT_CFG_G    	= 0x0B, \
-									\
-		INT1_CTRL       	= 0x0D, \
-		INT2_CTRL       	= 0x0E, \
-		WHO_AM_I        	= 0x0F, \
-		CTRL1_XL        	= 0x10, \
-		CTRL2_G         	= 0x11, \
-		CTRL3_C         	= 0x12, \
-		CTRL4_C         	= 0x13, \
-		CTRL5_C         	= 0x14, \
-		CTRL6_C         	= 0x15, \
-		CTRL7_G         	= 0x16, \
-		CTRL8_XL        	= 0x17, \
-		CTRL9_XL        	= 0x18, \
-		CTRL10_C        	= 0x19, \
-									\
-		WAKE_UP_SRC     	= 0x1B, \
-		TAP_SRC         	= 0x1C, \
-		D6D_SRC         	= 0x1D, \
-		STATUS_REG      	= 0x1E, \
-									\
-		OUT_TEMP_L      	= 0x20, \
-		OUT_TEMP_H      	= 0x21, \
-		OUTX_L_G        	= 0x22, \
-		OUTX_H_G        	= 0x23, \
-		OUTY_L_G        	= 0x24, \
-		OUTY_H_G        	= 0x25, \
-		OUTZ_L_G        	= 0x26, \
-		OUTZ_H_G        	= 0x27, \
-		OUTX_L_XL       	= 0x28, \
-		OUTX_H_XL       	= 0x29, \
-		OUTY_L_XL       	= 0x2A, \
-		OUTY_H_XL       	= 0x2B, \
-		OUTZ_L_XL       	= 0x2C, \
-		OUTZ_H_XL       	= 0x2D, \
-									\
-		FIFO_STATUS1    	= 0x3A, \
-		FIFO_STATUS2    	= 0x3B, \
-		FIFO_STATUS3    	= 0x3C, \
-		FIFO_STATUS4    	= 0x3D, \
-		FIFO_DATA_OUT_L 	= 0x3E, \
-		FIFO_DATA_OUT_H 	= 0x3F, \
-		TIMESTAMP0_REG  	= 0x40, \
-		TIMESTAMP1_REG  	= 0x41, \
-		TIMESTAMP2_REG  	= 0x42, \
-									\
-		STEP_TIMESTAMP_L	= 0x49, \
-		STEP_TIMESTAMP_H	= 0x4A, \
-		STEP_COUNTER_L  	= 0x4B, \
-		STEP_COUNTER_H  	= 0x4C, \
-									\
-		FUNC_SRC        	= 0x53, \
-									\
-		TAP_CFG         	= 0x58, \
-		TAP_THS_6D      	= 0x59, \
-		INT_DUR2        	= 0x5A, \
-		WAKE_UP_THS     	= 0x5B, \
-		WAKE_UP_DUR     	= 0x5C, \
-		FREE_FALL      		= 0x5D, \
-		MD1_CFG         	= 0x5E, \
-		MD2_CFG         	= 0x5F  )
+		self.Accel_Gyro_REG = dict(FUNC_CFG_ACCESS=0x01,
+								   FIFO_CTRL1=0x06,
+								   FIFO_CTRL2=0x07,
+								   FIFO_CTRL3=0x08,
+								   FIFO_CTRL4=0x09,
+								   FIFO_CTRL5=0x0A,
+								   ORIENT_CFG_G=0x0B,
+
+								   INT1_CTRL=0x0D,
+								   INT2_CTRL=0x0E,
+								   WHO_AM_I=0x0F,
+								   CTRL1_XL=0x10,
+								   CTRL2_G=0x11,
+								   CTRL3_C=0x12,
+								   CTRL4_C=0x13,
+								   CTRL5_C=0x14,
+								   CTRL6_C=0x15,
+								   CTRL7_G=0x16,
+								   CTRL8_XL=0x17,
+								   CTRL9_XL=0x18,
+								   CTRL10_C=0x19,
+
+								   WAKE_UP_SRC=0x1B,
+								   TAP_SRC=0x1C,
+								   D6D_SRC=0x1D,
+								   STATUS_REG=0x1E,
+
+								   OUT_TEMP_L=0x20,
+								   OUT_TEMP_H=0x21,
+								   OUTX_L_G=0x22,
+								   OUTX_H_G=0x23,
+								   OUTY_L_G=0x24,
+								   OUTY_H_G=0x25,
+								   OUTZ_L_G=0x26,
+								   OUTZ_H_G=0x27,
+								   OUTX_L_XL=0x28,
+								   OUTX_H_XL=0x29,
+								   OUTY_L_XL=0x2A,
+								   OUTY_H_XL=0x2B,
+								   OUTZ_L_XL=0x2C,
+								   OUTZ_H_XL=0x2D,
+
+								   FIFO_STATUS1=0x3A,
+								   FIFO_STATUS2=0x3B,
+								   FIFO_STATUS3=0x3C,
+								   FIFO_STATUS4=0x3D,
+								   FIFO_DATA_OUT_L=0x3E,
+								   FIFO_DATA_OUT_H=0x3F,
+								   TIMESTAMP0_REG=0x40,
+								   TIMESTAMP1_REG=0x41,
+								   TIMESTAMP2_REG=0x42,
+
+								   STEP_TIMESTAMP_L=0x49,
+								   STEP_TIMESTAMP_H=0x4A,
+								   STEP_COUNTER_L=0x4B,
+								   STEP_COUNTER_H=0x4C,
+
+								   FUNC_SRC=0x53,
+
+								   TAP_CFG=0x58,
+								   TAP_THS_6D=0x59,
+								   INT_DUR2=0x5A,
+								   WAKE_UP_THS=0x5B,
+								   WAKE_UP_DUR=0x5C,
+								   FREE_FALL=0x5D,
+								   MD1_CFG=0x5E,
+								   MD2_CFG=0x5F)
 
 		#Magnemometer addresses
-		self.Mag_REG= dict( \
-		WHO_AM_I    = 0x0F, \
-							\
-		CTRL_REG1   = 0x20, \
-		CTRL_REG2   = 0x21, \
-		CTRL_REG3   = 0x22, \
-		CTRL_REG4   = 0x23, \
-		CTRL_REG5   = 0x24, \
-							\
-		STATUS_REG  = 0x27, \
-		OUT_X_L     = 0x28, \
-		OUT_X_H     = 0x29, \
-		OUT_Y_L     = 0x2A, \
-		OUT_Y_H     = 0x2B, \
-		OUT_Z_L     = 0x2C, \
-		OUT_Z_H     = 0x2D, \
-		TEMP_OUT_L  = 0x2E, \
-		TEMP_OUT_H  = 0x2F, \
-		INT_CFG     = 0x30, \
-		INT_SRC     = 0x31, \
-		INT_THS_L   = 0x32, \
-		INT_THS_H   = 0x33  )
+		self.Mag_REG = dict(WHO_AM_I=0x0F,
+							CTRL_REG1=0x20,
+							CTRL_REG2=0x21,
+							CTRL_REG3=0x22,
+							CTRL_REG4=0x23,
+							CTRL_REG5=0x24,
+
+							STATUS_REG=0x27,
+							OUT_X_L=0x28,
+							OUT_X_H=0x29,
+							OUT_Y_L=0x2A,
+							OUT_Y_H=0x2B,
+							OUT_Z_L=0x2C,
+							OUT_Z_H=0x2D,
+							TEMP_OUT_L=0x2E,
+							TEMP_OUT_H=0x2F,
+							INT_CFG=0x30,
+							INT_SRC=0x31,
+							INT_THS_L=0x32,
+							INT_THS_H=0x33)
 				
 		#Unit scales
 		self.aScale = aScale
@@ -122,7 +118,7 @@ class MinIMU_v5_pi:
 		#Variables for updateAngle and updateYaw
 		self.prevAngle = [[0, 0, 0]] #x, y, z (roll, pitch, yaw)
 		self.prevYaw = [0]
-		self.tau = 0.04 #Want this roughly 10x the dt
+		self.tau = 0.04  #Want this roughly 10x the dt
 		self.lastTimeAngle = [0]
 		self.lastTimeYaw = [0]
 	
@@ -265,26 +261,35 @@ class MinIMU_v5_pi:
 			MZ = self._combineSignedLoHi(self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Z_L']), \
 									self.bus.read_byte_data(self.mag, self.Mag_REG['OUT_Z_H']))
 
-			# Temperature
-			TEMP = self._combineSignedLoHi(self.bus.read_byte_data(self.mag, self.Mag_REG["TEMP_OUT_L"]), self.bus.read_byte_data(self.mag, self.Mag_REG["TEMP_OUT_H"]))
-			TEMP /= 8.0
-			TEMP += 25
 		except:
 			#print "Error!"
 			return 0, 0, 0
-		#Scaling the decimal number to understandable units
+		# Scaling the decimal number to understandable units
 		MX *= self.mScale
 		MY *= self.mScale
 		MZ *= self.mScale
 
-		return [MX, MY, MZ], TEMP
+		return [MX, MY, MZ]
 
-	"""Combines Hi and Low 8-bit values to a 16-bit two's complement and
-	converts to decimal"""
+	def read_temperature(self):
+		"""
+
+		:return:
+		"""
+		# Temperature
+		try:
+			temp = self._combineSignedLoHi(self.bus.read_byte_data(self.mag, self.Mag_REG["TEMP_OUT_L"]), self.bus.read_byte_data(self.mag, self.Mag_REG["TEMP_OUT_H"]))
+			temp /= 8.0
+			temp += 25
+		except:
+			return 0, 0, 0
+		return temp
+
 	def byteToNumber(self, val_Low, val_Hi):
+		"""Combines Hi and Low 8-bit values to a 16-bit two's complement and converts to decimal"""
 		number = 256 * val_Hi + val_Low #2^8 = 256
 		if number >= 32768: #2^7 = 32768
-			number = number - 65536 #For two's complement
+			number = number - 65536 # For two's complement
 		return number
 
 	def _combineLoHi(self, loByte, hiByte):
@@ -296,29 +301,28 @@ class MinIMU_v5_pi:
 		combined = self._combineLoHi(loByte, hiByte)
 		return combined if combined < 32768 else (combined - 65536)
 
-
-	"""updateAngle() uses readAccelerometer(), readGyro(), readMagnetometer() to find the current roll,
-	pitch, and yaw of the IMU with a complementaty filter.  It requires the global variables tau,
-	prevAngle, and lastTimeAngle to exist as well."""
 	def updateAngle(self):
+		"""updateAngle() uses readAccelerometer(), readGyro(), readMagnetometer() to find the current roll,
+		pitch, and yaw of the IMU with a complementaty filter.  It requires the global variables tau,
+		prevAngle, and lastTimeAngle to exist as well."""
 		[Ax, Ay, Az] = self.readAccelerometer()
 		[Gx_w, Gy_w, Gz_w] = self.readGyro()
 		[Mx, My, Mz], TEMP = self.readMagnetometer()
 
-		if self.lastTimeAngle[0] == 0: #If this is the first time using updatePos
+		if self.lastTimeAngle[0] == 0: # If this is the first time using updatePos
 			self.lastTimeAngle[0] = time.time()
 
-		#Find the angle change given by the Gyro
+		# Find the angle change given by the Gyro
 		dt = time.time() - self.lastTimeAngle[0]    
 		Gx = self.prevAngle[0][0] + Gx_w * dt
 		Gy = self.prevAngle[0][1] + Gy_w * dt
 		Gz = self.prevAngle[0][2] + Gz_w * dt
 
-		#Using the Accelerometer find pitch and roll
+		# Using the Accelerometer find pitch and roll
 		rho = math.degrees(math.atan2(Ax, math.sqrt(Ay**2 + Az**2))) #pitch
 		phi = math.degrees(math.atan2(Ay, math.sqrt(Ax**2 + Az**2))) #roll
 
-		#Using the Magnetometer find yaw
+		# Using the Magnetometer yaw
 		theta = math.degrees(math.atan2(-1*My, Mx)) + 180 #yaw
 
 		#To deal with modular angles in a non-modular number system I had to keep
@@ -346,7 +350,7 @@ class MinIMU_v5_pi:
 		#Update time for dt calculations
 		self.lastTimeAngle[0] = time.time()
 
-		return xAngle, yAngle, zAngle #roll, pitch, yaw
+		return xAngle, yAngle, zAngle  #roll, pitch, yaw
 
 	"""updateYaw() uses readGyro() and readMagnetometer() to find the current yaw of the
 	IMU with a complementaty filter.  It requires the global variables tau,	prevYaw, 

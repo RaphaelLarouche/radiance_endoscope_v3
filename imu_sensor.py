@@ -4,12 +4,12 @@ Building on the class minimu9v5 from Github.
 """
 
 # Importation of standard modules
+import glob
 import numpy as np
 from scipy import linalg
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
-import glob
 
 import time
 import math
@@ -74,6 +74,11 @@ class MinIMUv5(MinIMU_v5_pi):
         self.roll_hat = 0.0
         self.yaw_hat = 0.0
 
+        # Madgwick algorithm _________
+        self.timemad = 0
+        self.q = np.zeros(4)
+        self.q[0] += 1
+
     def reset(self):
         """
 
@@ -108,7 +113,8 @@ class MinIMUv5(MinIMU_v5_pi):
 
         print("Move the sensor around each axis.")
         for i in range(3000):
-            read_mag = np.array(self.readMagnetometer()[0])
+            #read_mag = np.array(self.readMagnetometer()[0])
+            read_mag = self.readMagnetometer()
             print("{0:.3f} {1:.3f} {2:.3f}".format(read_mag[0], read_mag[1], read_mag[2]))
             s = np.append(s, read_mag)
             self.magread = read_mag
@@ -324,7 +330,8 @@ class MinIMUv5(MinIMU_v5_pi):
         # IMU sensors read
         [Ax, Ay, Az] = self.readAccelerometer()
         [Gx, Gy, Gz] = self.readGyro()
-        [Mx, My, Mz] = self.magnetometer_correction(self.readMagnetometer()[0])  # Magnetometer readings corrected
+        [Mx, My, Mz] = self.magnetometer_correction(self.readMagnetometer())  # Magnetometer readings corrected
+        t = self.read_temperature()
 
         # Time update
         if self.timekalman == 0:
@@ -353,7 +360,8 @@ class MinIMUv5(MinIMU_v5_pi):
         # Tilt compensation for measurement of magnetometer parallel with magnetic field
         Mxh = Mx * np.cos(pitch) + My * np.sin(pitch) * np.sin(roll) + Mz * np.sin(pitch) * np.cos(roll)
         Myh = -Mz * np.sin(roll) + My * np.cos(roll)
-        yaw = math.atan2(-Myh, Mxh) + np.pi
+        # yaw = math.atan2(-Myh, Mxh) + np.pi # Not sure if it's this
+        yaw = math.atan2(Myh, Mxh)
 
         if Gza - yaw > np.pi:
             Gza -= 2 * np.pi
@@ -404,12 +412,142 @@ class MinIMUv5(MinIMU_v5_pi):
 
         # Printing results
         if disp:
-            print("Roll: " + str(rhat) + " Pitch: " + str(phat) + " Yaw: " + str(yhat))
+            print("roll: {0:+.5f} pitch: {1:+.5f} yaw: {2:+.5f} temperature: {3:.5f}˚C".format(rhat, phat, yhat, t))
+            #print("Roll: " + str(rhat) + " Pitch: " + str(phat) + " Yaw: " + str(yhat) + "Temp: " + str(t))
 
         # Update time for dt calculations
         self.timekalman = time.time()
 
         return rhat, phat, yhat
+
+    def magdwick_quaternion(self):
+        """
+        Implementation of the fusion algorithm from Sebastian O.H Madgwick
+        (https://x-io.co.uk/open-source-imu-and-ahrs-algorithms/). The algorithm computes the quaternion from the 9DoF
+        data of the IMU.
+        :return:
+        """
+
+        # IMU sensors read
+        [ax, ay, az] = self.readAccelerometer()
+        [gx, gy, gz] = self.readGyro()
+        [mx, my, mz] = self.magnetometer_correction(self.readMagnetometer())  # Magnetometer readings corrected
+        #t = self.read_temperature()
+
+        # Time update
+        if self.timemad == 0:
+            self.timemad = time.time()
+
+        dtime = time.time() - self.timemad
+
+        q1, q2, q3, q4 = self.q[0], self.q[1], self.q[2], self.q[3]
+
+        # Transform gyro from dps (degrees per second) to rad/s
+        gx *= np.pi/180
+        gy *= np.pi/180
+        gz *= np.pi/180
+
+        # Auxiliary variables
+        _2q1, _2q2, _2q3, _2q4 = 2.0 * q1, 2.0 * q2, 2.0 * q3, 2.0 * q4
+        _2q1q3, _2q3q4 = 2.0 * q1 * q3, 2.0 * q3 * q4
+        q1q1, q1q2, q1q3, q1q4 = q1 * q1, q1 * q2, q1 * q3, q1 * q4
+        q2q2, q2q3, q2q4 = q2 * q2, q2 * q3, q2 * q4
+        q3q3, q3q4 = q3 * q3, q3 * q4
+        q4q4 = q4 * q4
+
+        # Normalise accelerometer measurements
+        norma = np.sqrt(ax * ax + ay * ay + az * az)
+        ax *= 1 / norma
+        ay *= 1 / norma
+        az *= 1 / norma
+
+        # Normalise magnetometer measurements
+        normm = np.sqrt(mx * mx + my * my + mz * mz)
+        mx *= 1 / normm
+        my *= 1 / normm
+        mz *= 1 / normm
+
+        # Earth reference magnetic field direction
+        _2q1mx, _2q1my, _2q1mz = 2 * q1 * mx, 2 * q1 * my, 2 * q1 * mz
+        _2q2mx = 2 * q2 * mx
+        hx = mx * q1q1 - _2q1my * q4 + _2q1mz * q3 + mx * q2q2 + _2q2 * my * q3 + _2q2 * mz * q4 - mx * q3q3 - mx * q4q4
+        hy = _2q1mx * q4 + my * q1q1 - _2q1mz * q2 + _2q2mx * q3 - my * q2q2 + my * q3q3 + _2q3 * mz * q4 - my * q4q4
+
+        _2bx = np.sqrt(hx * hx + hy * hy)
+        _2bz = -_2q1mx * q3 + _2q1my * q2 + mz * q1q1 + _2q2mx * q4 - mz * q2q2 + _2q3 * my * q4 - mz * q3q3 + mz * q4q4
+        _4bx = 2.0 * _2bx
+        _4bz = 2.0 * _2bz
+
+        # Gradient descent algorithm
+        s1 = -_2q3 * (2.0 * q2q4 - _2q1q3 - ax) + _2q2 * (2.0 * q1q2 + _2q3q4 - ay) - \
+             _2bz * q3 * (_2bx * (0.5 - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + \
+             (-_2bx * q4 + _2bz * q2) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + \
+             _2bx * q3 * (_2bx * (q1q3 + q2q4) + _2bz * (0.5 - q2q2 - q3q3) - mz)
+
+        s2 = _2q4 * (2.0 * q2q4 - _2q1q3 - ax) + _2q1 * (2.0 * q1q2 + _2q3q4 - ay) - \
+             4.0 * q2 * (1.0 - 2.0 * q2q2 - 2.0 * q3q3 - az) + \
+             _2bz * q4 * (_2bx * (0.5 - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + \
+             (_2bx * q3 + _2bz * q1) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + \
+             (_2bx * q4 - _4bz * q2) * (_2bx * (q1q3 + q2q4) + _2bz * (0.5 - q2q2 - q3q3) - mz)
+
+        s3 = -_2q1 * (2.0 * q2q4 - _2q1q3 - ax) + _2q4 * (2.0 * q1q2 + _2q3q4 - ay) - \
+             4.0 * q3 * (1.0 - 2.0 * q2q2 - 2.0 * q3q3 - az) + \
+             (-_4bx * q3 - _2bz * q1) * (_2bx * (0.5 - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + \
+             (_2bx * q2 + _2bz * q4) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + \
+             (_2bx * q1 - _4bz * q3) * (_2bx * (q1q3 + q2q4) + _2bz * (0.5 - q2q2 - q3q3) - mz)
+
+        s4 = _2q2 * (2.0 * q2q4 - _2q1q3 - ax) + _2q3 * (2.0 * q1q2 + _2q3q4 - ay) + \
+             (-_4bx * q4 + _2bz * q2) * (_2bx * (0.5 - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + \
+             (-_2bx * q1 + _2bz * q3) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + \
+             _2bx * q2 * (_2bx * (q1q3 + q2q4) + _2bz * (0.5 - q2q2 - q3q3) - mz)
+
+        norms = np.sqrt(s1 * s1 + s2 * s2 + s3 * s3)
+        s1 *= 1 / norms
+        s2 *= 1 / norms
+        s3 *= 1 / norms
+        s4 *= 1 / norms
+
+        # Rate of change of quaternion
+        beta = 0.8  # tester pour avoir le meilleur paramètre
+        qDot1 = 0.5 * (-q2 * gx - q3 * gy - q4 * gz) - beta * s1
+        qDot2 = 0.5 * (q1 * gx + q3 * gz - q4 * gy) - beta * s2
+        qDot3 = 0.5 * (q1 * gy - q2 * gz + q4 * gx) - beta * s3
+        qDot4 = 0.5 * (q1 * gz + q2 * gy - q3 * gx) - beta * s4
+
+        # Integration for quaternion
+        q1 += qDot1 * dtime
+        q2 += qDot2 * dtime
+        q3 += qDot3 * dtime
+        q4 += qDot4 * dtime
+
+        # Normalise quaternion
+        normq = np.sqrt(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4)
+        self.q[0] = q1 / normq
+        self.q[1] = q2 / normq
+        self.q[2] = q3 / normq
+        self.q[3] = q4 / normq
+
+        rquat, pquat, yquat = self.quaternion_to_euler(self.q)
+        print("roll: {0:+.5f} pitch: {1:+.5f} yaw: {2:+.5f}".format(rquat * 180 / np.pi,
+                                                                    pquat * 180 / np.pi,
+                                                                    yquat * 180 / np.pi))
+
+        self.timemad = time.time()
+
+        return self.q
+
+    @staticmethod
+    def quaternion_to_euler(q):
+        """
+
+        :return:
+        """
+
+        yawq = math.atan2(2.0 * (q[1] * q[2] + q[0] * q[3]), q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3])
+        pitchq = -1.0 * math.asin(2.0 * (q[1] * q[3] - q[0] * q[2]))
+        rollq = math.atan2(2.0 * (q[0] * q[1] + q[2] * q[3]), q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3])
+
+        return rollq, pitchq, yawq
 
     def updateAngleCalib(self):
         """
@@ -418,7 +556,7 @@ class MinIMUv5(MinIMU_v5_pi):
         """
         [Ax, Ay, Az] = self.readAccelerometer()
         [Gx_w, Gy_w, Gz_w] = self.readGyro()
-        [Mx, My, Mz] = self.magnetometer_correction(self.readMagnetometer()[0])
+        [Mx, My, Mz] = self.magnetometer_correction(self.readMagnetometer())
 
         if self.lastTimeAngle[0] == 0:  # First time using updatePos
             self.lastTimeAngle[0] = time.time()
@@ -502,38 +640,54 @@ class MinIMUv5(MinIMU_v5_pi):
             self.kalman_filter(disp=True)
             time.sleep(0.004)
 
+    def trackquaternion(self):
+
+        thread.start_new_thread(self.trackquaternionthread, ())
+
+    def trackquaternionthread(self):
+
+        while True:
+            self.magdwick_quaternion()
+            time.sleep(0.004)
+
     def start_anim(self):
         self.fig, self.ax = plt.subplots(1, 3, figsize=(8, 5))
-        #self.acc_offsets()
 
         self.timeanim = time.time()
-        anim = animation.FuncAnimation(self.fig, self.anim_, interval=100)  # Updated every 100 ms
-        plt.show()
 
+        ani = animation.FuncAnimation(self.fig, self.anim_, interval=4)  # Updated every 100 ms
+        plt.show()
         self.reset()
 
     def anim_(self, i):
         time_diff = time.time() - self.timeanim
-        roll, pitch, yaw = self.updateAngleCalib()
+        # roll, pitch, yaw = self.updateAngleCalib()
+        # roll_k, pitch_k, yaw_k = self.kalman_filter()
 
-        roll_k, pitch_k, yaw_k = self.kalman_filter()
+        self.magdwick_quaternion()
+        rquat, pquat, yquat = self.quaternion_to_euler(self.q)
 
-        self.ax[0].plot(time_diff, roll, "r.")
-        self.ax[1].plot(time_diff, pitch, "r.")
-        self.ax[2].plot(time_diff, yaw, "r.")
 
-        self.ax[0].plot(time_diff, roll_k, "b.")
-        self.ax[1].plot(time_diff, pitch_k, "b.")
-        self.ax[2].plot(time_diff, yaw_k, "b.")
+        # self.ax[0].plot(time_diff, roll, "r.")
+        # self.ax[1].plot(time_diff, pitch, "r.")
+        # self.ax[2].plot(time_diff, yaw, "r.")
+        #
+        # self.ax[0].plot(time_diff, roll_k, "b.")
+        # self.ax[1].plot(time_diff, pitch_k, "b.")
+        # self.ax[2].plot(time_diff, yaw_k, "b.")
+
+        self.ax[0].plot(time_diff, rquat * 180 / np.pi, "g.")
+        self.ax[1].plot(time_diff, pquat * 180 / np.pi, "g.")
+        self.ax[2].plot(time_diff, yquat * 180 / np.pi, "g.")
+
+        return self.ax
 
     def animcalibration_(self, i):
         print("Frame number {}".format(i))
 
-        read_mag = np.array(self.readMagnetometer()[0])
+        read_mag = np.array(self.readMagnetometer())
         #self.magread = np.append(self.magread, read_mag)
         self.magread.append(read_mag[0])
-
-
 
         print(self.magread)
 
@@ -563,14 +717,12 @@ class MinIMUv5(MinIMU_v5_pi):
         return self.pl1, self.pl2, self.pl3,
 
 
-
 if __name__ == "__main__":
+
     sens = MinIMUv5()
-
     sens.magnetometer_calibration(save=False)  # calibration
-
+    #sens.trackAngleKalman()
     #sens.start_anim()
-
-    sens.trackAngleKalman()
+    sens.trackquaternion()
 
     plt.show()
