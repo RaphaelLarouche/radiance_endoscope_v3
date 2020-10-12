@@ -345,6 +345,8 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
             # Adding medium to metadata
             met_dict["medium"] = self.medium.lower()
 
+            # Adding pressure
+
             return met_dict
         else:
             raise ValueError("Not the type of metadata expected. Should be a xiapi.Ximage instance.")
@@ -511,6 +513,9 @@ class MyDialog(QtWidgets.QDialog, cameracontrol.ProcessImage):
                 self.ui.errorlog.setText("Dark frame already exists.")
         else:
             self.ui.errorlog.setText("No directory selected.")
+
+    def auto_exposure_algorithm(self):
+        return
 
     def verify_temp(self):
         temp = self.cam.get_sensor_board_temp()

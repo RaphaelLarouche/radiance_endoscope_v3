@@ -8,17 +8,17 @@ Optimize version with cleaner function (radiance_endoscope_v2 for original funct
 """
 
 # Importation of standard modules
+import time
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import glob
 from math import pi
 import quadpy
 from scipy.interpolate import griddata
 from scipy.spatial import cKDTree
 import scipy.integrate as integrate
-import time
+import matplotlib
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 # Importation of other modules
 import cameracontrol

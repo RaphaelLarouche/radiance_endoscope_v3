@@ -124,7 +124,7 @@ class CameraThread(QtCore.QThread):
                     met_dict[i[0]] = getattr(structure, i[0])
             return met_dict
         else:
-            raise ValueError("Not the type of metadata expected. Should be a xiapi.Ximage instance.")
+            raise ValueError("Unexpected metadata type. Should be a xiapi.Ximage instance.")
 
     def verify_temp(self):
         temp = self.cam.get_sensor_board_temp()
